@@ -39,3 +39,6 @@ extend-immutable-calls = ["typer.Argument", "typer.Option"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["E501"]

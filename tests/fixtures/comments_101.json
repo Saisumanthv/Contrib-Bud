@@ -1,0 +1,2 @@
+[{"user": {"login": "maint", "type": "User"}, "created_at": "2026-09-21T10:00:00Z", "body": "Thanks for the report!"},
+ {"user": {"login": "github-actions[bot]", "type": "Bot"}, "created_at": "2026-09-22T10:00:00Z", "body": "I'll take this to triage."}]

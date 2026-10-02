@@ -186,11 +186,12 @@ def search_issues(owner: str, repo: str, labels: list[str], per_page: int) -> tu
 
 
 def find_issues(
-    repo_arg: str, limit: int = 10, claim_days: int = 14, check_comments: bool = True
+    repo_arg: str, limit: int = 10, claim_days: int = 14, check_comments: bool = True,
+    now: datetime | None = None,
 ) -> dict[str, Any]:
     """Find available beginner-friendly issues. See module docstring."""
     owner, repo = parse_repo(repo_arg)
-    now = datetime.now(UTC)
+    now = now or datetime.now(UTC)
     all_labels = fetch_labels(owner, repo)
     labels = match_beginner_labels(all_labels)
     note = None

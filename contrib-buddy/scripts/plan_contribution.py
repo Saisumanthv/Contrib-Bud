@@ -56,6 +56,11 @@ ISSUE_PLACEHOLDER_RE = re.compile(
     r"[ \t]*(?:#[ \t]*)?(?:<[^>\n]*>|_+|X+|\.\.\.|\(.*?\))?[ \t]*$",
     re.IGNORECASE | re.MULTILINE,
 )
+SECONDARY_PATHS = re.compile(
+    r"(^|/)(tests?|__tests__|spec|e2e|cypress|fixtures?|__fixtures__|demos?|examples?|"
+    r"snapshots?|benchmarks?|docs?)/|[._-](test|spec)\.|\.snap$"
+)
+MIN_FILE_SCORE = 2.5
 COMMON_KEYWORD_SHARE = 0.03  # ignore keywords matching more than 3% of paths (e.g. "lib", "src")
 
 
@@ -73,7 +78,7 @@ def change_type(labels: list[str], title: str) -> str:
 def slugify(text: str, max_words: int = 6, max_len: int = 40) -> str:
     """Lowercase, hyphenated slug from the first meaningful words of `text`."""
     text = re.sub(r"^\s*(\[[^\]]*\]|\w+(\([^)]*\))?:)\s*", "", text)  # drop "[Bug]" / "fix:"
-    words = re.findall(r"[a-z0-9]+", text.lower())
+    words = re.findall(r"[a-z0-9]+", re.sub(r"['\u2019]", "", text.lower()))
     slug = "-".join(words[:max_words])[:max_len].strip("-")
     return slug or "change"
 
@@ -144,6 +149,12 @@ def extract_keywords(text: str) -> dict[str, int]:
     return weights
 
 
+def path_tokens(text: str) -> set[str]:
+    """Split a path or name into lowercase tokens, including camelCase parts."""
+    spaced = re.sub(r"([a-z0-9])([A-Z])", r"\1 \2", text)
+    return set(re.split(r"[^a-z0-9]+", spaced.lower())) - {""}
+
+
 def find_likely_files(text: str, paths: set[str], limit: int = 8) -> list[dict[str, Any]]:
     """Rank repo paths by keyword overlap with the issue text."""
     keywords = extract_keywords(text)
@@ -155,9 +166,9 @@ def find_likely_files(text: str, paths: set[str], limit: int = 8) -> list[dict[s
             continue
         lower = path.lower()
         base = lower.rsplit("/", 1)[-1]
-        stem_tokens = set(re.split(r"[^a-z0-9]+", base.rsplit(".", 1)[0]))
-        dir_part = lower.rsplit("/", 1)[0] if "/" in lower else ""
-        dir_tokens = set(re.split(r"[^a-z0-9]+", dir_part)) - {""}
+        stem = path.rsplit("/", 1)[-1].rsplit(".", 1)[0]
+        stem_tokens = path_tokens(stem) | {re.sub(r"[^a-z0-9]", "", stem.lower())}
+        dir_tokens = path_tokens(path.rsplit("/", 1)[0]) if "/" in path else set()
         candidates.append((path, lower, base, stem_tokens, dir_tokens))
 
     # Drop plain-word keywords so common they carry no signal (IDF-style).
@@ -169,21 +180,28 @@ def find_likely_files(text: str, paths: set[str], limit: int = 8) -> list[dict[s
 
     scored = []
     for path, lower, base, stem_tokens, dir_tokens in candidates:
-        score, hits = 0, []
+        score: float = 0
+        hits = []
         for kw, w in keywords.items():
             if "/" in kw or "." in kw:
                 if lower.endswith(kw) or base == kw.rsplit("/", 1)[-1]:
                     score += w * 3
                     hits.append(kw)
-            elif kw in stem_tokens or base.startswith(kw + "."):
+                continue
+            if kw in stem_tokens:
                 score += w * 2
                 hits.append(kw)
-            elif kw in dir_tokens:
+            if kw in dir_tokens:
                 score += w
                 hits.append(kw)
-        if score >= 3:
-            is_test = bool(re.search(r"(^|/)(tests?|__tests__|spec)/|[._-](test|spec)\.", lower))
-            scored.append((score - (1 if is_test else 0), path, hits))
+        if not hits:
+            continue
+        # Prefer source over tests/fixtures/docs, and short specific names over long ones.
+        if SECONDARY_PATHS.search(lower):
+            score *= 0.5
+        score /= 1 + 0.15 * max(0, len(stem_tokens) - 4)
+        if score >= MIN_FILE_SCORE:
+            scored.append((round(score, 1), path, hits))
     scored.sort(key=lambda s: (-s[0], len(s[1])))
     return [{"path": p, "score": s, "matched": sorted(set(h))[:5]} for s, p, h in scored[:limit]]
 

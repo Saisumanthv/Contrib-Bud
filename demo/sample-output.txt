@@ -1,0 +1,59 @@
+$ buddy analyze mermaid-js/mermaid --no-ai
+┌─ mermaid-js/mermaid ────────────────────────────────────────────────────────────────────────────┐
+│ Generation of diagrams like flowcharts or sequence diagrams from text in a similar manner as    │
+│ markdown                                                                                        │
+│ ⭐ 90516  ·  license MIT  ·  default branch develop                                             │
+│ TypeScript 57.2%, Mermaid 20.1%, JavaScript 15.4%, HTML 4.3%                                    │
+└─────────────────────────────────────────────────────────────────────────────────────────────────┘
+Docs found: README.md, CONTRIBUTING.md, CODE_OF_CONDUCT.md, .github/pull_request_template.md
+Install                        
+ Command      │ Source         
+──────────────┼────────────────
+ pnpm install │ pnpm-lock.yaml 
+Test                      
+ Command   │ Source       
+───────────┼──────────────
+ pnpm test │ package.json 
+Lint                      
+ Command   │ Source       
+───────────┼──────────────
+ pnpm lint │ package.json 
+CI runs                                                                          
+ Command                                  │ Source                               
+──────────────────────────────────────────┼──────────────────────────────────────
+ pnpm -w run lint:fix                     │ .github/workflows/autofix.yml        
+ USE_APPLI=true pnpm exec playwright test │ .github/workflows/e2e-applitools.yml 
+Contribution rules detected                                                                        
+ Rule               │ Evidence                                                                     
+────────────────────┼──────────────────────────────────────────────────────────────────────────────
+ changelog_required │ .github/pull_request_template.md: - [ ] 🦋 If your PR makes a change that    
+                    │ should be noted in one or more packages'                                     
+ branch_prefixes    │ CONTRIBUTING.md: branch names shown in docs                                  
+┌─ Next step ─────────────────────────────────────────────────────────────────────────────────────┐
+│ Find a beginner-friendly issue:  buddy issues mermaid-js/mermaid                                │
+└─────────────────────────────────────────────────────────────────────────────────────────────────┘
+
+$ buddy issues mermaid-js/mermaid -n 5 --no-ai
+Available issues in mermaid-js/mermaid                                                             
+┌──────┬───────────────────────────────────────────────────────────┬───────┬─────────┬───────┬────┐
+│    # │ Title                                                     │ Level │ Clarity │   Age │ 💬 │
+├──────┼───────────────────────────────────────────────────────────┼───────┼─────────┼───────┼────┤
+│ 4121 │ Starting task after milestone doesn't work with >1        │ easy  │      70 │ 1319d │  3 │
+│      │ milestone                                                 │       │         │       │    │
+│ 3426 │ multiple word type in erDiagram attributes                │ easy  │      65 │ 1486d │  4 │
+│ 2850 │ allow relative dates in Gantt (eg m1,m2,m3)               │ easy  │      60 │ 1654d │  4 │
+│ 3228 │ Support for Circular Flow Diagram                         │ easy  │      35 │ 1538d │ 24 │
+│ 1604 │ Please add association class support to classDiagram      │ easy  │      35 │ 2248d │ 24 │
+│      │ syntax                                                    │       │         │       │    │
+└──────┴───────────────────────────────────────────────────────────┴───────┴─────────┴───────┴────┘
+Top pick by heuristics: #4121 — +15 detailed description; +15 has reproduction steps / expected 
+behavior; +5 includes code block; +10 maintainers labelled it beginner-friendly
+┌─ Next step ─────────────────────────────────────────────────────────────────────────────────────┐
+│ Get a step-by-step plan:  buddy plan https://github.com/mermaid-js/mermaid/issues/4121          │
+└─────────────────────────────────────────────────────────────────────────────────────────────────┘
+
+$ buddy plan https://github.com/mermaid-js/mermaid/issues/4121 --no-ai -o demo/sample-plan.md
+┌─ Next step ─────────────────────────────────────────────────────────────────────────────────────┐
+│ Saved to demo\sample-plan.md. Fork the repo and run section 1. When your change is committed,   │
+│ run buddy check inside your clone.                                                              │
+└─────────────────────────────────────────────────────────────────────────────────────────────────┘

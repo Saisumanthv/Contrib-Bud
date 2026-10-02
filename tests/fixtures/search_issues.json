@@ -1,0 +1,17 @@
+{"total_count": 4, "items": [
+  {"number": 101, "title": "Docs: fix typo in `README.md` install section", "html_url": "https://github.com/acme/widgets/issues/101",
+   "labels": [{"name": "good first issue"}, {"name": "documentation"}], "assignee": null, "assignees": [],
+   "comments": 2, "created_at": "2026-09-20T10:00:00Z", "updated_at": "2026-09-28T10:00:00Z",
+   "user": {"login": "maint"}, "reactions": {"total_count": 1},
+   "body": "The install section in README.md says `pip install widget` but the package is `widgets`.\n\nExpected behavior: the command should be `pip install widgets`."},
+  {"number": 102, "title": "Crash when config is empty", "html_url": "https://github.com/acme/widgets/issues/102",
+   "labels": [{"name": "good first issue"}, {"name": "bug"}], "assignee": null, "assignees": [],
+   "comments": 3, "created_at": "2026-09-01T10:00:00Z", "updated_at": "2026-09-30T10:00:00Z",
+   "user": {"login": "reporter"}, "body": "Steps to reproduce:\n1. create empty config.toml\n2. run widgets\n\nIt crashes in src/widgets/config.py."},
+  {"number": 103, "title": "Already assigned issue", "html_url": "https://github.com/acme/widgets/issues/103",
+   "labels": [{"name": "good first issue"}], "assignee": {"login": "alice"}, "assignees": [{"login": "alice"}],
+   "comments": 0, "created_at": "2026-09-01T10:00:00Z", "updated_at": "2026-09-01T10:00:00Z", "user": {"login": "m"}, "body": "x"},
+  {"number": 104, "title": "No comments issue", "html_url": "https://github.com/acme/widgets/issues/104",
+   "labels": [{"name": "good first issue"}], "assignee": null, "assignees": [],
+   "comments": 0, "created_at": "2026-09-25T10:00:00Z", "updated_at": "2026-09-25T10:00:00Z", "user": {"login": "m"}, "body": "short"}
+]}
