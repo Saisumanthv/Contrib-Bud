@@ -2,7 +2,7 @@
 name: contrib-buddy
 description: Guides a new contributor from zero to their first pull request on any public GitHub repository. Reads the repo's README, CONTRIBUTING and templates, detects the stack and test commands, finds unclaimed beginner-friendly issues (good first issue, help wanted, hacktoberfest), ranks them, writes a step-by-step contribution plan with branch name, commit message and PR description drafts, and runs a pre-PR checklist. Use when the user says things like "help me contribute to a repo", "find a good first issue", "how do I contribute to owner/repo", "plan my fix for this issue", "prepare my PR", "is my PR ready", or mentions Hacktoberfest or open-source contributions.
 license: MIT
-compatibility: Requires Python 3.10+, the requests package, git, and internet access to api.github.com and raw.githubusercontent.com. Optional GITHUB_TOKEN env var raises the API rate limit.
+compatibility: Requires Python 3.11+, the requests package, git, and internet access to api.github.com and raw.githubusercontent.com. Optional GITHUB_TOKEN env var raises the API rate limit.
 metadata:
   author: contrib-buddy contributors
   version: "0.1.0"
@@ -17,7 +17,7 @@ Help a human make a good first contribution. **You advise and draft; the human a
 - **Facts come from scripts, not memory.** Every claim about a repo (rules, commands, issues, files) must come from script output. Cite the source inline, e.g. `(CONTRIBUTING.md)`, `(#1234)`, `(package.json)`.
 - If a script says something is unknown, say "unknown — check the repo" rather than guessing.
 - **Never** open PRs, post comments, push, or assign issues on the user's behalf. Give them the exact text and commands to run themselves.
-- All scripts print JSON (or Markdown with `--markdown`) to stdout and friendly errors to stderr with a non-zero exit code. If a script reports a rate limit, tell the user to set `GITHUB_TOKEN` or wait.
+- Scripts print JSON to stdout (`plan_contribution.py` prints Markdown unless `--json`; `precheck_pr.py --markdown` prints a checklist) and friendly errors to stderr with a non-zero exit code. If a script reports a rate limit, tell the user to set `GITHUB_TOKEN` or wait.
 
 Run scripts from the skill root with `python scripts/<name>.py`. All take `--help`.
 
