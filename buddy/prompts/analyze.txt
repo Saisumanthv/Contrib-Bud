@@ -1,0 +1,18 @@
+Explain how to contribute to the repository $repo to a first-time contributor.
+
+Write Markdown with exactly these sections (short bullet points, cite sources in [brackets]):
+
+## What this project is
+1-2 sentences.
+
+## Set up and run the tests
+The install, test and lint commands from FACTS, as a bash code block, then one sentence on anything unusual.
+
+## Rules that matter for your first PR
+The contribution rules from FACTS (sign-off/DCO, CLA, issue linking, commit style, tests, AI policy, assignment). Only include rules present in FACTS.
+
+## Watch out for
+1-3 gotchas a beginner might miss (e.g. a CLA to sign first, a required changelog, a strict PR template). If there are none in FACTS, write "Nothing unusual found."
+
+FACTS (JSON from the repo's files and the GitHub API):
+$facts

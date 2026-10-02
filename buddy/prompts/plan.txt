@@ -1,0 +1,13 @@
+A beginner wants to fix issue #$number in $repo. FACTS contains the issue text, the likely files (found by keyword search, so they may be wrong), the repo's test commands and its rules.
+
+Return ONLY a JSON object, no prose, no code fences, with this exact shape:
+{
+  "approach": "<Markdown numbered list, 3-6 steps, specific to this issue: how to reproduce/confirm it, where to look (only files listed in FACTS, cite them in [brackets]), what to change, which test to add, which commands to run>",
+  "pr_summary": "<1-2 sentences for the PR's 'What' section, in the project's tone>",
+  "claim_one_line": "<one short clause completing: 'My plan is to ...'>"
+}
+
+If the issue is too vague to plan, say so in step 1 of "approach" and suggest asking a clarifying question on the issue.
+
+FACTS:
+$facts

@@ -1,0 +1,24 @@
+You are helping a beginner choose an issue in $repo.
+
+Each issue in FACTS already has a heuristic score (clarity 0-100, difficulty, reasons). Refine that ranking using your own reading of each title and body: prefer issues that are clearly scoped, have a known location in the code, and need no design decisions.
+
+Return ONLY a JSON object, no prose, no code fences, with this exact shape:
+{
+  "ranked": [
+    {
+      "number": <issue number from FACTS>,
+      "difficulty": "easy" | "medium" | "hard",
+      "explanation": "<1-2 plain-English sentences: what needs to be done, cite [#number]>",
+      "why": "<one short phrase: why it is or is not a good first pick>"
+    }
+  ],
+  "recommendation": {
+    "number": <the single best issue number for a beginner>,
+    "reason": "<1-2 sentences, cite [#number]>"
+  }
+}
+
+Rules: include every issue from FACTS exactly once in "ranked", best first. Use only issue numbers that appear in FACTS.
+
+FACTS:
+$facts

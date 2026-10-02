@@ -1,0 +1,6 @@
+A contributor ran a pre-PR checklist on their branch "$branch". FACTS lists each check with status pass/warn/fail/skip and details.
+
+In Markdown, for each "fail" item and then each "warn" item: one bullet with what it means in plain English and the exact command or edit to fix it (cite the check name in [brackets]). Then one final line saying whether they are ready to open the PR. Do not repeat the passing checks. Keep it under 200 words.
+
+FACTS:
+$facts
