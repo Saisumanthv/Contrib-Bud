@@ -16,6 +16,7 @@ from __future__ import annotations
 import argparse
 import re
 import subprocess
+import sys
 from pathlib import Path
 from typing import Any
 
@@ -27,6 +28,7 @@ CONVENTIONAL_RE = re.compile(
 )
 ISSUE_REF_RE = re.compile(r"(#\d+|github\.com/[^/\s]+/[^/\s]+/issues/\d+)")
 DIFF_WARN_LINES, DIFF_FAIL_LINES = 400, 1500
+PY_MODULE_TOOLS = {"pytest", "ruff", "mypy", "black", "flake8", "tox", "nox", "pre-commit"}
 ICON = {"pass": "✅", "warn": "⚠️", "fail": "❌", "skip": "⏭️"}
 
 
@@ -151,18 +153,30 @@ def resolve_base(base: str | None, root: Path) -> str:
                       "and pass --base upstream/<default-branch>.")
 
 
+def _not_found(proc: subprocess.CompletedProcess) -> bool:
+    out = proc.stdout + proc.stderr
+    return proc.returncode in (127, 9009) or "not recognized" in out or "command not found" in out
+
+
 def run_command(cmd: str, root: Path, timeout: int) -> dict[str, str]:
-    """Run one lint/test command and summarize the result."""
-    try:
-        proc = subprocess.run(cmd, cwd=root, shell=True, capture_output=True, text=True,
+    """Run one lint/test command and summarize the result.
+
+    Python tools that are installed but not on PATH are retried as `python -m <tool>`.
+    """
+    def run(command: str) -> subprocess.CompletedProcess:
+        return subprocess.run(command, cwd=root, shell=True, capture_output=True, text=True,
                               encoding="utf-8", errors="replace", timeout=timeout)
+
+    try:
+        proc = run(cmd)
+        if _not_found(proc) and cmd.split()[0] in PY_MODULE_TOOLS:
+            proc = run(f'"{sys.executable}" -m {cmd}')
     except subprocess.TimeoutExpired:
         return check(f"Run `{cmd}`", "warn", f"timed out after {timeout}s")
     tail = (proc.stdout + proc.stderr).strip().splitlines()[-6:]
     if proc.returncode == 0:
         return check(f"Run `{cmd}`", "pass", "exit 0")
-    if proc.returncode in (127, 9009) or "not recognized" in "\n".join(tail) \
-            or "command not found" in "\n".join(tail):
+    if _not_found(proc) or "No module named" in "\n".join(tail):
         return check(f"Run `{cmd}`", "warn", "tool not installed — install dev dependencies first")
     return check(f"Run `{cmd}`", "fail", f"exit {proc.returncode}: " + " | ".join(tail)[-400:])
 
