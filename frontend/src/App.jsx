@@ -22,7 +22,7 @@ export default function App() {
             const isIssue = query.includes('/issues/');
 
             if (isIssue) {
-                const response = await fetch(`https://contrib-bud.onrender.com//api/plan`, {
+                const response = await fetch(`https://contrib-bud.onrender.com/api/plan`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ issue_url: query, ai: true })
@@ -32,12 +32,12 @@ export default function App() {
                 setData({ type: 'plan', content: result });
             } else {
                 const [analyzeRes, issuesRes] = await Promise.all([
-                    fetch(`https://contrib-bud.onrender.com//api/analyze`, {
+                    fetch(`https://contrib-bud.onrender.com/api/analyze`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({ repo: query, ai: true })
                     }),
-                    fetch(`https://contrib-bud.onrender.com//api/issues`, {
+                    fetch(`https://contrib-bud.onrender.com/api/issues`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({ repo: query, ai: true })
@@ -68,7 +68,7 @@ export default function App() {
         setIssues(null);
 
         try {
-            const response = await fetch(`https://contrib-bud.onrender.com//api/plan`, {
+            const response = await fetch(`https://contrib-bud.onrender.com/api/plan`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ issue_url: issueUrl, ai: true })
