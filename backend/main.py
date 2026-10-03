@@ -18,7 +18,7 @@ from pathlib import Path
 load_dotenv(Path(__file__).parent / ".env")
 load_dotenv(Path(__file__).parent.parent / ".env")
 
-app = FastAPI(title="contrib-buddy API")
+app = FastAPI(title="contrib-bud API")
 
 app.add_middleware(
     CORSMiddleware,
