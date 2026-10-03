@@ -1,5 +1,7 @@
 """Structured output parsing, validation/retry, and provider plumbing (network mocked)."""
 
+import copy
+
 import pytest
 import requests
 
@@ -88,6 +90,27 @@ def test_gemma_provider_skips_thought_parts(monkeypatch):
     assert "gemma-4-26b-a4b-it:generateContent" in calls["url"]
     assert calls["headers"]["x-goog-api-key"] == "k"
     assert calls["body"]["systemInstruction"]["parts"][0]["text"] == "sys"
+
+
+def test_gemma_provider_turns_thinking_off_for_prose_only(monkeypatch):
+    payload = {"candidates": [{"content": {"parts": [{"text": "ok"}]}}]}
+    bodies = []
+
+    def fake_post(url, headers, json, timeout):
+        bodies.append(copy.deepcopy(json))
+        if len(bodies) == 1:  # a model that can't switch thinking off
+            return FakeResponse(400, text="Thinking level is not supported for this model.")
+        return FakeResponse(200, payload)
+
+    monkeypatch.setattr(requests, "post", fake_post)
+    assert providers.GemmaProvider(api_key="k").generate("s", "p") == "ok"
+    assert bodies[0]["generationConfig"]["thinkingConfig"] == {"thinkingLevel": "minimal"}
+    assert "thinkingConfig" not in bodies[1]["generationConfig"]  # retried without it
+
+    bodies.clear()
+    bodies.append("skip the 400")
+    providers.GemmaProvider(api_key="k").generate("s", "p", json_mode=True)
+    assert "thinkingConfig" not in bodies[1]["generationConfig"]
 
 
 def test_gemma_provider_friendly_errors(monkeypatch):

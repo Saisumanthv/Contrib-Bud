@@ -26,4 +26,5 @@ def no_network(monkeypatch):
 
     monkeypatch.setattr(requests, "get", boom)
     monkeypatch.setattr(requests, "post", boom)
+    monkeypatch.setattr(requests.Session, "request", boom)
     monkeypatch.setenv("CONTRIB_BUDDY_NO_CACHE", "1")

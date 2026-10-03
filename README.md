@@ -21,6 +21,14 @@ buddy analyze mermaid-js/mermaid      # then: buddy issues <repo>, buddy plan <i
 
 No key? Use `BUDDY_PROVIDER=ollama` (local, offline) or add `--no-ai` to see the facts only. If `buddy` is not on your PATH, use `python -m buddy`.
 
+### Prefer a browser?
+
+```bash
+buddy web        # or double-click start-web.bat on Windows
+```
+
+This opens a local page at http://127.0.0.1:8765. Paste a repo link to see how to contribute and which issues are free. Click an issue to get a plan you can copy or download. You can also paste an issue link directly. It runs only on your machine, and your keys stay in `.env`.
+
 ## How it works
 
 ```mermaid

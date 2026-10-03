@@ -46,20 +46,22 @@ class GemmaProvider:
 
     def generate(self, system: str, prompt: str, json_mode: bool = False) -> str:
         """Call generateContent and return the non-thought text parts."""
+        config: dict = {"temperature": 0.2 if json_mode else 0.4}
+        if not json_mode:
+            # Prose summaries don't need reasoning: default thinking spends ~3k tokens (1-2
+            # minutes) before a ~200-token answer. Gemma 4 on the Gemini API accepts only
+            # "minimal" here (thinkingBudget and "low" are rejected; checked 2026-10-03).
+            config["thinkingConfig"] = {"thinkingLevel": "minimal"}
         body = {
             "systemInstruction": {"parts": [{"text": system}]},
             "contents": [{"role": "user", "parts": [{"text": prompt}]}],
-            "generationConfig": {"temperature": 0.2 if json_mode else 0.4},
+            "generationConfig": config,
         }
-        try:
-            resp = requests.post(
-                GEMINI_URL.format(model=self.model),
-                headers={"x-goog-api-key": self.api_key, "Content-Type": "application/json"},
-                json=body, timeout=TIMEOUT,
-            )
-        except requests.RequestException as exc:
-            raise ProviderError(f"Could not reach the Gemini API ({exc.__class__.__name__}). "
-                                "Check your connection, or use BUDDY_PROVIDER=ollama.") from exc
+        resp = self._post(body)
+        rejected = resp.status_code == 400 and "thinking" in resp.text.lower()
+        if rejected and "thinkingConfig" in config:
+            del config["thinkingConfig"]  # a BUDDY_MODEL override that can't switch it off
+            resp = self._post(body)
         if resp.status_code in (400, 401, 403) and "API key" in resp.text:
             raise ProviderError("GEMINI_API_KEY was rejected. Create a new key at "
                                 "https://aistudio.google.com/apikey.")
@@ -72,6 +74,17 @@ class GemmaProvider:
         if resp.status_code >= 400:
             raise ProviderError(f"Gemini API error {resp.status_code}: {resp.text[:300]}")
         return _gemini_text(resp.json())
+
+    def _post(self, body: dict) -> requests.Response:
+        try:
+            return requests.post(
+                GEMINI_URL.format(model=self.model),
+                headers={"x-goog-api-key": self.api_key, "Content-Type": "application/json"},
+                json=body, timeout=TIMEOUT,
+            )
+        except requests.RequestException as exc:
+            raise ProviderError(f"Could not reach the Gemini API ({exc.__class__.__name__}). "
+                                "Check your connection, or use BUDDY_PROVIDER=ollama.") from exc
 
 
 def _gemini_text(data: dict) -> str:

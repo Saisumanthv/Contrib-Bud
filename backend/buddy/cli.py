@@ -32,7 +32,8 @@ for _stream in (sys.stdout, sys.stderr):  # Windows consoles default to cp1252; 
     if hasattr(_stream, "reconfigure"):
         _stream.reconfigure(encoding="utf-8", errors="replace")
 console = Console()
-NO_AI_HELP = "Skip the model; show facts and heuristics only."
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+NO_AI_HELP ="Skip the model; show facts and heuristics only."
 STATUS_STYLE = {"pass": "green", "warn": "yellow", "fail": "red", "skip": "dim"}
 STATUS_ICON = {"pass": "✔", "warn": "!", "fail": "✘", "skip": "–"}
 
@@ -398,9 +399,25 @@ def check(
     raise typer.Exit(0 if result["ready"] else 1)
 
 
+@app.command()
+def web(
+    port: int = typer.Option(8765, "--port", "-p", help="Port to serve on."),
+    no_browser: bool = typer.Option(False, "--no-browser", help="Don't open a browser tab."),
+) -> None:
+    """Open the contrib-buddy web app in your browser."""
+    from buddy.web import serve
+
+    try:
+        serve(port=port, open_browser=not no_browser)
+    except OSError as exc:
+        fail(f"Could not start the web app on port {port}: {exc}",
+             "Is it already running? Try another port with --port 8766.")
+
+
 @app.callback()
 def _main() -> None:
     load_dotenv()
+    load_dotenv(PROJECT_ROOT / ".env")  # also works when started outside the project folder
 
 
 if __name__ == "__main__":

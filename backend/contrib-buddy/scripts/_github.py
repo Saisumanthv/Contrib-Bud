@@ -15,6 +15,7 @@ import os
 import re
 import sys
 import tempfile
+import threading
 import time
 from collections.abc import Callable
 from pathlib import Path
@@ -30,6 +31,9 @@ except ImportError:  # pragma: no cover - environment guard
 API = "https://api.github.com"
 RAW = "https://raw.githubusercontent.com"
 TIMEOUT = 20
+# Give up on an unreachable address quickly so the next DNS address is tried (a
+# blocked GitHub IP otherwise costs the OS default of ~21s per new connection).
+CONNECT_TIMEOUT = 5
 USER_AGENT = "contrib-buddy/0.1"
 CACHE_DIR = Path(tempfile.gettempdir()) / "contrib-buddy-cache"
 CACHE_TTL = 15 * 60
@@ -38,6 +42,16 @@ _REPO_RE = re.compile(r"^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})/[A-Za-z0-9._-]{1,100}
 _ISSUE_URL_RE = re.compile(
     r"^(?:https?://)?(?:www\.)?github\.com/([^/\s]+)/([^/\s]+)/(?:issues|pull)/(\d+)"
 )
+
+
+_local = threading.local()
+
+
+def _session() -> requests.Session:
+    """One keep-alive session per thread: reuses connections across the many small fetches."""
+    if not hasattr(_local, "session"):
+        _local.session = requests.Session()
+    return _local.session
 
 
 class GitHubError(Exception):
@@ -143,7 +157,8 @@ def api_get(path: str, params: dict[str, Any] | None = None, *, not_found: str =
     if cached is not None:
         return cached
     try:
-        resp = requests.get(f"{API}{path}", headers=_headers(), params=params, timeout=TIMEOUT)
+        resp = _session().get(f"{API}{path}", headers=_headers(), params=params,
+                              timeout=(CONNECT_TIMEOUT, TIMEOUT))
     except requests.RequestException as exc:
         raise GitHubError(f"Could not reach api.github.com ({exc.__class__.__name__}). "
                           "Check your internet connection.") from exc
@@ -170,7 +185,8 @@ def raw_get(owner: str, repo: str, ref: str, path: str) -> str | None:
     """Fetch a file's text from raw.githubusercontent.com, or None if missing."""
     url = f"{RAW}/{owner}/{repo}/{quote(ref, safe='')}/{quote(path)}"
     try:
-        resp = requests.get(url, headers={"User-Agent": USER_AGENT}, timeout=TIMEOUT)
+        resp = _session().get(url, headers={"User-Agent": USER_AGENT},
+                              timeout=(CONNECT_TIMEOUT, TIMEOUT))
     except requests.RequestException:
         return None
     if resp.status_code != 200:
