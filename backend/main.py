@@ -8,6 +8,7 @@ from buddy.web import (
     api_analyze,
     api_issues,
     api_plan,
+    api_chat,
     provider_status,
     ApiError,
 )
@@ -57,6 +58,10 @@ def issues(body: dict):
 @app.post("/api/plan")
 def plan(body: dict):
     return api_plan(body)
+
+@app.post("/api/chat")
+def chat(body: dict):
+    return api_chat(body)
 
 if __name__ == "__main__":
     uvicorn.run("main:app", host="127.0.0.1", port=8765, reload=True)

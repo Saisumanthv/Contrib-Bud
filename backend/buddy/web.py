@@ -114,7 +114,33 @@ def api_plan(body: dict[str, Any]) -> dict[str, Any]:
     return data
 
 
-ROUTES = {"/api/analyze": api_analyze, "/api/issues": api_issues, "/api/plan": api_plan}
+def api_chat(body: dict[str, Any]) -> dict[str, Any]:
+    repo = _text(body, "repo")
+    question = _text(body, "question")
+    history = body.get("history", [])
+
+    info = repo_docs.fetch_repo_docs(repo)
+    provider, ai_error = maybe_provider(True)
+    if not provider:
+        raise ApiError(ai_error or "AI provider unavailable.")
+
+    history_str = ""
+    for msg in history:
+        role = msg.get("role", "User")
+        content = msg.get("content", "")
+        history_str += f"{role}: {content}\n\n"
+
+    try:
+        reply = llm.ask(provider, "chat", repo=repo,
+                        facts=json.dumps(analyze_facts(info), ensure_ascii=False),
+                        history=history_str.strip(), question=question)
+    except (ProviderError, llm.LLMError) as exc:
+        raise ApiError(str(exc))
+    
+    return {"reply": reply}
+
+
+ROUTES = {"/api/analyze": api_analyze, "/api/issues": api_issues, "/api/plan": api_plan, "/api/chat": api_chat}
 
 
 # --- HTTP plumbing ----------------------------------------------------------------

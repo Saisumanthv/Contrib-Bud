@@ -1,0 +1,12 @@
+You are answering a user's question about the repository "$repo".
+
+FACTS (Context about the repo):
+$facts
+
+CONVERSATION HISTORY:
+$history
+
+NEW QUESTION:
+$question
+
+Answer the NEW QUESTION using the facts and conversation history above. Be helpful, concise, and friendly. Do not invent facts that are not present. If you don't know the answer based on the context, say so.

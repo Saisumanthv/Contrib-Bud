@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import ReactMarkdown from 'react-markdown';
 import './App.css';
 
@@ -8,6 +8,46 @@ export default function App() {
     const [data, setData] = useState(null);
     const [issues, setIssues] = useState(null);
     const [error, setError] = useState('');
+
+    const [chatInput, setChatInput] = useState('');
+    const [chatHistory, setChatHistory] = useState(() => {
+        const saved = sessionStorage.getItem('chatHistory');
+        return saved ? JSON.parse(saved) : [];
+    });
+    const [chatLoading, setChatLoading] = useState(false);
+
+    useEffect(() => {
+        sessionStorage.setItem('chatHistory', JSON.stringify(chatHistory));
+    }, [chatHistory]);
+
+    const handleChatSubmit = async (e) => {
+        e.preventDefault();
+        if (!chatInput.trim() || chatLoading) return;
+
+        const newHistory = [...chatHistory, { role: 'User', content: chatInput }];
+        setChatHistory(newHistory);
+        setChatInput('');
+        setChatLoading(true);
+
+        try {
+            const repo = data?.content?.facts?.repo || data?.content?.repo;
+            if (!repo) throw new Error("No repository analyzed. Please analyze a repo first.");
+
+            const response = await fetch(`http://127.0.0.1:8765/api/chat`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ repo, question: chatInput, history: newHistory })
+            });
+            const result = await response.json();
+            if (!response.ok) throw new Error(result.error || 'Chat failed');
+            
+            setChatHistory([...newHistory, { role: 'Assistant', content: result.reply }]);
+        } catch (err) {
+            setChatHistory([...newHistory, { role: 'System', content: `Error: ${err.message}` }]);
+        } finally {
+            setChatLoading(false);
+        }
+    };
 
     const handleSubmit = async (e) => {
         e.preventDefault();
@@ -275,6 +315,46 @@ Could you please assign it to me? Let me know if there is anything specific I sh
                                 </div>
                             </div>
                         )}
+                    </div>
+                )}
+
+                {data && !loading && (
+                    <div className="glass chat-section animate-in" style={{ animationDelay: '0.2s', marginTop: '2rem', padding: '2rem' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+                            <h3 style={{ margin: 0 }}>💬 Chat with Repo Data</h3>
+                            {chatHistory.length > 0 && (
+                                <button 
+                                    onClick={() => setChatHistory([])}
+                                    className="search-button"
+                                    style={{ padding: '0.5rem 1rem', fontSize: '0.9rem', background: 'rgba(239, 68, 68, 0.2)', color: '#fca5a5' }}
+                                    type="button"
+                                >
+                                    Clear
+                                </button>
+                            )}
+                        </div>
+                        <div className="chat-history">
+                            {chatHistory.map((msg, idx) => (
+                                <div key={idx} className={`chat-message ${msg.role.toLowerCase()}`}>
+                                    <strong>{msg.role}: </strong>
+                                    <ReactMarkdown>{msg.content}</ReactMarkdown>
+                                </div>
+                            ))}
+                            {chatLoading && <div className="chat-message assistant pulsing">Assistant is typing...</div>}
+                        </div>
+                        <form onSubmit={handleChatSubmit} className="chat-form">
+                            <input 
+                                type="text"
+                                className="search-input"
+                                placeholder="Ask a question about this repo..."
+                                value={chatInput}
+                                onChange={e => setChatInput(e.target.value)}
+                                disabled={chatLoading}
+                            />
+                            <button type="submit" className="search-button" disabled={chatLoading || !chatInput.trim()}>
+                                Send
+                            </button>
+                        </form>
                     </div>
                 )}
             </main>
