@@ -1,4 +1,4 @@
-# contrib-buddy
+# contrib-bud
 
 **From zero to your first pull request on any GitHub repo, with an open-weight model as your mentor.**
 
