@@ -20,9 +20,9 @@ export default function App() {
 
         try {
             const isIssue = query.includes('/issues/');
-            
+
             if (isIssue) {
-                const response = await fetch(`http://localhost:8765/api/plan`, {
+                const response = await fetch(`https://contrib-bud.onrender.com//api/plan`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ issue_url: query, ai: true })
@@ -32,18 +32,18 @@ export default function App() {
                 setData({ type: 'plan', content: result });
             } else {
                 const [analyzeRes, issuesRes] = await Promise.all([
-                    fetch(`http://localhost:8765/api/analyze`, {
+                    fetch(`https://contrib-bud.onrender.com//api/analyze`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({ repo: query, ai: true })
                     }),
-                    fetch(`http://localhost:8765/api/issues`, {
+                    fetch(`https://contrib-bud.onrender.com//api/issues`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({ repo: query, ai: true })
                     })
                 ]);
-                
+
                 const analyzeResult = await analyzeRes.json();
                 const issuesResult = await issuesRes.json();
 
@@ -68,7 +68,7 @@ export default function App() {
         setIssues(null);
 
         try {
-            const response = await fetch(`http://localhost:8765/api/plan`, {
+            const response = await fetch(`https://contrib-bud.onrender.com//api/plan`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ issue_url: issueUrl, ai: true })
@@ -130,7 +130,7 @@ export default function App() {
                                 {data.content.facts.description && (
                                     <p className="subtitle">{data.content.facts.description}</p>
                                 )}
-                                
+
                                 <div className="stats-row">
                                     <div className="stat">
                                         <span className="stat-label">Stars</span>
@@ -161,8 +161,8 @@ export default function App() {
                                         <p className="issues-hint">Click on any issue below to automatically generate a step-by-step contribution plan!</p>
                                         <div className="issues-list">
                                             {issues.issues.map(issue => (
-                                                <div 
-                                                    key={issue.number} 
+                                                <div
+                                                    key={issue.number}
                                                     className={`issue-card ${issue.number === issues.recommendation?.number ? 'recommended' : ''}`}
                                                     onClick={() => handleIssueClick(issue.url)}
                                                 >
@@ -235,7 +235,7 @@ export default function App() {
                                         </div>
                                     </div>
                                 </div>
-                                
+
                                 <div className="plan-details">
                                     <div className="detail-item">
                                         <span className="label">Suggested Branch Name</span>
@@ -245,7 +245,7 @@ export default function App() {
                                         <span className="label">Suggested Commit Message</span>
                                         <code className="code-block">{data.content.commit_message}</code>
                                     </div>
-                                    
+
                                     {data.content.markdown && (
                                         <div className="detail-item">
                                             <span className="label">PR Description Template</span>
@@ -259,7 +259,7 @@ export default function App() {
                                         <span className="label">Comment Template (To claim the issue)</span>
                                         <div className="markdown-body pr-template" style={{ borderColor: 'rgba(59, 130, 246, 0.5)', background: 'rgba(59, 130, 246, 0.05)' }}>
                                             <ReactMarkdown>
-{`Hi! 👋 I would love to contribute by working on this issue. 
+                                                {`Hi! 👋 I would love to contribute by working on this issue. 
 
 Could you please assign it to me? Let me know if there is anything specific I should know before getting started!`}
                                             </ReactMarkdown>
