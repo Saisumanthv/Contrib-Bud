@@ -29,6 +29,8 @@ python scripts/fetch_repo_docs.py OWNER/REPO
 ```
 Summarize for the user in plain English: what the project is, how to set it up, how to run tests (`stack.test_commands`), and the contribution rules that matter (`rules`: DCO sign-off, CLA, issue-link requirement, commit convention). Flag anything that blocks a first-timer (e.g., CLA must be signed first).
 
+Start with `health`: its `label` (Welcoming / Slow / Inactive / Not enough data) and `summary` say whether maintainers respond to outside contributors, based on the last commit, median first response on recent PRs, outside contributors' merge rate, the open PR backlog and any stale bot (`signals`, each with a `detail`). If the verdict is Slow or Inactive, say so first and suggest the user ask on an issue before investing time. If `health.error` is set, say the health check could not run.
+
 ### 2. Find an issue
 ```
 python scripts/find_issues.py OWNER/REPO --limit 10 > issues.json

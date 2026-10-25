@@ -8,7 +8,9 @@ Prints JSON with: repo metadata, docs (README, CONTRIBUTING, CODE_OF_CONDUCT,
 PR template, issue templates), detected stack (languages, package manager,
 install/test/lint commands, each with the file it came from), and
 contribution rules (DCO, CLA, issue-link requirement, commit convention...).
-Uses 3 GitHub API calls; file contents come from raw.githubusercontent.com.
+Also includes a maintainer-health verdict from repo_health.py (Welcoming / Slow /
+Inactive). Uses 3 GitHub API calls plus about 10 for health (--no-health skips
+them); file contents come from raw.githubusercontent.com.
 """
 
 from __future__ import annotations
@@ -20,6 +22,7 @@ import tomllib
 from typing import Any
 
 from _github import GitHubError, api_get, emit_json, parse_repo, raw_get, run_cli, truncate
+from repo_health import repo_health
 
 # --- doc discovery ----------------------------------------------------------
 
@@ -351,7 +354,7 @@ def fetch_tree(owner: str, repo: str, branch: str) -> tuple[set[str], bool]:
     return paths, bool(data.get("truncated"))
 
 
-def fetch_repo_docs(repo_arg: str, max_chars: int = 12000) -> dict[str, Any]:
+def fetch_repo_docs(repo_arg: str, max_chars: int = 12000, health: bool = True) -> dict[str, Any]:
     """Collect docs, stack and rules for a repo. See module docstring."""
     owner, repo = parse_repo(repo_arg)
     meta = api_get(
@@ -398,6 +401,14 @@ def fetch_repo_docs(repo_arg: str, max_chars: int = 12000) -> dict[str, Any]:
         rule_docs[docs["readme"]["path"]] = docs["readme"]["content"]
     rules = extract_rules(rule_docs, paths)
 
+    health_info = None
+    if health:
+        workflows = {p: t for p, t in stack_files.items() if p.startswith(".github/workflows/")}
+        try:
+            health_info = repo_health(f"{owner}/{repo}", meta, paths, workflows)
+        except GitHubError as exc:  # e.g. rate limit: the docs are still worth showing
+            health_info = {"verdict": None, "error": str(exc)}
+
     return {
         "repo": f"{owner}/{repo}",
         "url": meta["html_url"],
@@ -414,6 +425,7 @@ def fetch_repo_docs(repo_arg: str, max_chars: int = 12000) -> dict[str, Any]:
         "docs": docs,
         "stack": stack,
         "rules": rules,
+        "health": health_info,
         "warnings": _warnings(meta, docs),
     }
 
@@ -435,8 +447,10 @@ def main() -> int:
     ap.add_argument("repo", help="owner/repo or GitHub URL")
     ap.add_argument("--max-chars", type=int, default=12000,
                     help="max characters of CONTRIBUTING to include (README gets half)")
+    ap.add_argument("--no-health", action="store_true",
+                    help="skip the repo health check (saves about 10 API calls)")
     args = ap.parse_args()
-    emit_json(fetch_repo_docs(args.repo, args.max_chars))
+    emit_json(fetch_repo_docs(args.repo, args.max_chars, not args.no_health))
     return 0
 
 

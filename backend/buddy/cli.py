@@ -108,9 +108,40 @@ def analyze_facts(info: dict[str, Any]) -> dict[str, Any]:
         "repo": info["repo"], "description": info["description"], "topics": info["topics"],
         "license": info["license"], "default_branch": info["default_branch"],
         "stack": info["stack"], "rules": info["rules"], "warnings": info["warnings"],
+        "health": health_facts(info.get("health")),
         "readme": doc(docs["readme"], 3500), "contributing": doc(docs["contributing"], 7000),
         "pr_template": doc(docs["pr_templates"][0] if docs["pr_templates"] else None, 1500),
     }
+
+
+def health_facts(health: dict[str, Any] | None) -> dict[str, Any] | None:
+    """The health verdict and its reasons, without the raw numbers."""
+    if not health or not health.get("verdict"):
+        return None
+    return {"verdict": health["label"], "summary": health["summary"],
+            "signals": {s["label"]: s["detail"] for s in health["signals"]}}
+
+
+HEALTH_STYLE = {"welcoming": "green", "slow": "yellow", "inactive": "red", "unknown": "dim"}
+HEALTH_ICON = {"good": "✔", "ok": "!", "bad": "✘", "unknown": "–", "info": "i"}
+SIGNAL_STYLE = {"good": "green", "ok": "yellow", "bad": "red", "unknown": "dim", "info": "cyan"}
+
+
+def print_health(health: dict[str, Any] | None) -> None:
+    """The Welcoming / Slow / Inactive badge and the signals behind it."""
+    if not health:
+        return
+    if not health.get("verdict"):
+        console.print(f"[dim]Repo health: could not check ({esc(health.get('error', ''))})[/]")
+        return
+    style = HEALTH_STYLE[health["verdict"]]
+    lines = [f"[bold {style}]● {health['label']}[/]  {esc(health['summary'])}"]
+    for s in health["signals"]:
+        icon = HEALTH_ICON[s["status"]]
+        lines.append(f"  [{SIGNAL_STYLE[s['status']]}]{icon}[/] {s['label']}: "
+                     f"[dim]{esc(s['detail'])}[/]")
+    console.print(Panel("\n".join(lines), title="Repo health", title_align="left",
+                        border_style=style))
 
 
 @app.command()
@@ -146,6 +177,7 @@ def analyze(
         f"default branch [cyan]{info['default_branch']}[/]\n{langs}",
         title=f"[bold]{info['repo']}[/]", title_align="left",
     ))
+    print_health(info.get("health"))
     found = [(k, v["path"]) for k, v in info["docs"].items() if isinstance(v, dict)]
     found += [("pr_template", t["path"]) for t in info["docs"]["pr_templates"]]
     console.print("[bold]Docs found:[/] " + (", ".join(f"{p}" for _, p in found) or "none"))

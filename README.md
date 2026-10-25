@@ -39,6 +39,7 @@ flowchart LR
     AG --> S
     subgraph S[Skill scripts: deterministic facts]
       F1[fetch_repo_docs.py<br/>docs, stack, rules]
+      F6[repo_health.py<br/>maintainer responsiveness]
       F2[find_issues.py<br/>unclaimed beginner issues]
       F3[rank_issues.py<br/>clarity and difficulty heuristics]
       F4[plan_contribution.py<br/>branch, commit, likely files, PR text]
@@ -55,10 +56,26 @@ flowchart LR
 
 | Command | Facts (scripts) | Model's job |
 |---|---|---|
-| `buddy analyze <owner/repo>` | README, CONTRIBUTING, templates, stack, test/lint commands, rules | Plain-English "how to contribute here" |
+| `buddy analyze <owner/repo>` | README, CONTRIBUTING, templates, stack, test/lint commands, rules, plus a **repo health** badge (Welcoming / Slow / Inactive) | Plain-English "how to contribute here", leading with health warnings |
 | `buddy issues <owner/repo>` | Beginner-labelled issues minus assigned / linked-PR / recently claimed; heuristic scores | Rank, explain each issue, recommend one |
 | `buddy plan <issue-url>` | Branch name, setup/test commands, likely files, commit style, PR template | Issue-specific approach, PR summary, claim comment |
 | `buddy check` | Diff size, commit style, DCO, issue link, PR template, runs lint/tests | Explain each failure and how to fix it |
+
+### Repo health: is this repo worth my time?
+
+`analyze` starts with a **Welcoming / Slow / Inactive** badge so you don't spend weeks on a repo whose maintainers never respond. [`repo_health.py`](backend/contrib-buddy/scripts/repo_health.py) checks:
+
+| Signal | Good | Bad |
+|---|---|---|
+| Last commit on the default branch | ≤ 30 days | > 180 days |
+| Median time to first response on outside contributors' PRs (6 PRs at least 14 days old; an unanswered one counts as its age) | ≤ 3 days | > 14 days |
+| Share of recently closed outside PRs that were merged | ≥ 50% | < 25% |
+| Open PRs untouched for 30+ days | ≤ 30% | > 60% |
+| Stale bot (`.github/stale.yml` or `actions/stale`) | shown as a tip: reply quickly or your PR may be auto-closed | |
+
+The verdict is **Inactive** if the repo is archived, hasn't had a commit in 6 months, or is bad at both responding and merging. It is **Welcoming** if the last commit is recent, nothing is bad, and responses or merges are good. Otherwise it is **Slow**. If there are too few outside PRs to judge, it says so instead of guessing.
+
+"Outside contributors" means anyone who isn't an owner, member or collaborator, with bots excluded. GitHub relabels a first-timer as a regular contributor once their PR is merged, so counting only first-timers would hide every merged first PR.
 
 ## Agent skill vs. CLI
 
@@ -92,7 +109,8 @@ Variables can also go in a `.env` file (see [`.env.example`](.env.example)).
 - **Heuristics, not understanding.** "Likely files" uses keyword matching over file paths, not code search, and the clarity/difficulty scores are rough. The model refines them, but always read the code yourself.
 - **Claim detection** reads comments from the last 14 days in English only. Linked PRs are detected through GitHub search's `-linked:pr` qualifier.
 - **Rule extraction** is pattern-based (DCO, CLA, Conventional Commits, issue linking…). Unusual wording can be missed, so skim CONTRIBUTING anyway.
-- **Rate limits:** without `GITHUB_TOKEN`, one `analyze` + `issues` + `plan` run uses roughly 10–20 of your 60 requests/hour.
+- **Rate limits:** without `GITHUB_TOKEN`, one `analyze` + `issues` + `plan` run uses roughly 20–30 of your 60 requests/hour (the health check accounts for about 11; `fetch_repo_docs.py --no-health` skips it).
+- **Health is a sample.** It reads the latest 100 PRs and 6 PR timelines, so a quiet month or a Hacktoberfest spam wave can skew it. Use it to decide where to look first, not as a final judgment.
 - Model output can still be wrong despite the citations. contrib-buddy drafts; you review.
 - **Hacktoberfest 2026** no longer counts PRs toward rewards ([hacktoberfest.com](https://hacktoberfest.com)). This tool is about real, useful contributions, not PR counts.
 

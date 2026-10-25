@@ -12,7 +12,7 @@ The install, test and lint commands from FACTS, as a bash code block, then one s
 The contribution rules from FACTS (sign-off/DCO, CLA, issue linking, commit style, tests, AI policy, assignment). Only include rules present in FACTS.
 
 ## Watch out for
-1-3 gotchas a beginner might miss (e.g. a CLA to sign first, a required changelog, a strict PR template). If there are none in FACTS, write "Nothing unusual found."
+If FACTS.health.verdict is "Slow" or "Inactive", start with that and its reasons [GitHub API]. Then 1-3 gotchas a beginner might miss (e.g. a CLA to sign first, a required changelog, a strict PR template). If there are none in FACTS, write "Nothing unusual found."
 
 FACTS (JSON from the repo's files and the GitHub API):
 $facts

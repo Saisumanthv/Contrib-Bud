@@ -112,3 +112,17 @@ def test_requires_json_content_type(server):
 
 def test_unknown_route_is_404(server):
     assert call(server + "/api/nope", {})[0] == 404
+
+
+def test_tree_returns_sorted_paths(monkeypatch):
+    seen = {}
+
+    def fake_tree(owner, repo, branch):
+        seen["args"] = (owner, repo, branch)
+        return {"src/b.py", "README.md", "src/a.py"}, False
+
+    monkeypatch.setattr(web.repo_docs, "fetch_tree", fake_tree)
+    data = web.api_tree({"repo": "https://github.com/o/r", "branch": "main"})
+    assert seen["args"] == ("o", "r", "main")
+    assert data["paths"] == ["README.md", "src/a.py", "src/b.py"]
+    assert data["truncated"] is False

@@ -16,10 +16,12 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
 
-from buddy import llm
+from buddy import llm, rag
 from buddy.cli import analyze_facts, apply_refinement, issues_facts, merge_ranking, plan_facts
 from buddy.providers import Provider, ProviderError, get_provider
-from buddy.skill import GitHubError, issues, planner, ranker, repo_docs
+from buddy.skill import GitHubError, github, issues, planner, ranker, repo_docs
+
+CHAT_HISTORY_TURNS = 10  # messages of earlier conversation sent with each question
 
 STATIC_DIR = Path(__file__).resolve().parent.parent.parent / "frontend"
 MAX_BODY = 10_000
@@ -114,33 +116,94 @@ def api_plan(body: dict[str, Any]) -> dict[str, Any]:
     return data
 
 
-def api_chat(body: dict[str, Any]) -> dict[str, Any]:
-    repo = _text(body, "repo")
-    question = _text(body, "question")
-    history = body.get("history", [])
+def api_index(body: dict[str, Any]) -> dict[str, Any]:
+    """Build (or reuse) the chat's search index for a repo, so the first question is quick."""
+    info = repo_docs.fetch_repo_docs(_text(body, "repo"))
+    owner, repo = info["repo"].split("/")
+    return rag.get_index(owner, repo, info["default_branch"]).stats()
 
-    info = repo_docs.fetch_repo_docs(repo)
+
+def _history_text(history: Any, question: str) -> tuple[str, str]:
+    """(earlier conversation as text, the user's previous question) from the page's messages."""
+    turns = [m for m in history if isinstance(m, dict) and m.get("role") in ("User", "Assistant")]
+    last = turns[-1] if turns else {}
+    if last.get("role") == "User" and str(last.get("content", "")).strip() == question:
+        turns = turns[:-1]  # the page includes the new question; the prompt has it separately
+    turns = turns[-CHAT_HISTORY_TURNS:]
+    text = "\n\n".join(f"{m['role']}: {str(m.get('content', ''))[:1500]}" for m in turns)
+    asked = [str(m.get("content", "")) for m in turns if m["role"] == "User"]
+    # The previous question gives a follow-up ("and where is that tested?") something to search for.
+    return text or "(none yet)", asked[-1] if asked else ""
+
+
+def _issue_facts(data: dict[str, Any]) -> dict[str, Any]:
+    """The plan's issue facts plus the issue's discussion."""
+    owner, repo = data["repo"].split("/")
+    number = data["issue"]["number"]
+    comments = github.api_get(f"/repos/{owner}/{repo}/issues/{number}/comments",
+                              {"per_page": 30})
+    return {**plan_facts(data), "comments": [
+        {"author": (c.get("user") or {}).get("login", "?"), "body": (c.get("body") or "")[:1500]}
+        for c in comments[-15:]
+    ]}
+
+
+def api_chat(body: dict[str, Any]) -> dict[str, Any]:
+    """Answer a question about a repo (mode "repo") or one of its issues (mode "issue").
+
+    Retrieval-augmented: the question is searched against the repo's files and the best
+    matching chunks go into the prompt next to the repo or issue facts.
+    """
+    question = _text(body, "question")
+    mode = body.get("mode", "repo")
+    if mode not in ("repo", "issue"):
+        raise ApiError("'mode' must be 'repo' or 'issue'.")
     provider, ai_error = maybe_provider(True)
     if not provider:
         raise ApiError(ai_error or "AI provider unavailable.")
+    history, previous_question = _history_text(body.get("history", []), question)
 
-    history_str = ""
-    for msg in history:
-        role = msg.get("role", "User")
-        content = msg.get("content", "")
-        history_str += f"{role}: {content}\n\n"
+    if mode == "issue":
+        data = planner.plan_contribution(_text(body, "issue_url"))
+        repo_name, branch = data["repo"], data["default_branch"]
+        context = {"issue": json.dumps(_issue_facts(data), ensure_ascii=False),
+                   "number": data["issue"]["number"]}
+        query = f"{question} {previous_question}"
+        # Issue titles are often vague ("UX improvement"); the description names the parts.
+        search_context = f"{data['issue']['title']} {data['issue']['body'][:1500]}"
+    else:
+        info = repo_docs.fetch_repo_docs(_text(body, "repo"))
+        repo_name, branch = info["repo"], info["default_branch"]
+        context = {"facts": json.dumps(analyze_facts(info), ensure_ascii=False)}
+        query, search_context = f"{question} {previous_question}", ""
+
+    # Without the index the chat still answers from the facts, and says why code is missing.
+    chunks, index_error = [], None
+    try:
+        chunks = rag.get_index(*repo_name.split("/"), branch).search(query, context=search_context)
+    except GitHubError as exc:
+        index_error = str(exc)
+    snippets = rag.format_snippets(chunks) if not index_error else f"(unavailable: {index_error})"
 
     try:
-        reply = llm.ask(provider, "chat", repo=repo,
-                        facts=json.dumps(analyze_facts(info), ensure_ascii=False),
-                        history=history_str.strip(), question=question)
+        reply = llm.ask(provider, "chat_issue" if mode == "issue" else "chat", repo=repo_name,
+                        snippets=snippets, history=history, question=question, **context)
     except (ProviderError, llm.LLMError) as exc:
-        raise ApiError(str(exc))
-    
-    return {"reply": reply}
+        raise ApiError(str(exc)) from exc
+    return {"reply": reply, "repo": repo_name, "branch": branch, "index_error": index_error,
+            "sources": [{"path": c.path, "start": c.start, "end": c.end} for c in chunks]}
 
 
-ROUTES = {"/api/analyze": api_analyze, "/api/issues": api_issues, "/api/plan": api_plan, "/api/chat": api_chat}
+def api_tree(body: dict[str, Any]) -> dict[str, Any]:
+    owner, repo = repo_docs.parse_repo(_text(body, "repo"))
+    branch = _text(body, "branch")
+    paths, truncated = repo_docs.fetch_tree(owner, repo, branch)
+    return {"repo": f"{owner}/{repo}", "branch": branch, "paths": sorted(paths),
+            "truncated": truncated}
+
+
+ROUTES = {"/api/analyze": api_analyze, "/api/issues": api_issues, "/api/plan": api_plan,
+          "/api/chat": api_chat, "/api/tree": api_tree, "/api/index": api_index}
 
 
 # --- HTTP plumbing ----------------------------------------------------------------
