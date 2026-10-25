@@ -6,7 +6,9 @@ Usage:
 
 Matches the repo's own beginner labels (good first issue, help wanted,
 beginner, easy, hacktoberfest, ...), then drops issues that are assigned,
-have a linked open PR, or have a recent "I'll take this" comment.
+have a linked open PR, or have a recent "I'll take this" comment. Issues with the
+repo's docs, typo, test or translation labels are searched too (lower-risk first
+PRs) and get up to a third of the results.
 Prints JSON: {"repo", "labels_used", "issues": [...], "skipped": [...]}.
 """
 
@@ -38,6 +40,10 @@ CLAIM_RE = re.compile(
     re.IGNORECASE | re.MULTILINE,
 )
 DEFAULT_LABELS = ("good first issue", "help wanted")
+NON_CODE_LABEL_RE = re.compile(
+    r"\bdocs?\b|documentation|typo|spelling|translat|\bi18n\b|\bl10n\b|locali[sz]ation"
+    r"|\btests?\b|testing|test[\s_-]*coverage", re.I)
+NON_CODE_SHARE = 3  # up to a third of the results are kept for non-code issues
 SEARCH_QUERY_MAX = 250
 
 
@@ -49,6 +55,12 @@ def label_rank(name: str) -> int | None:
         if re.search(pattern, name, re.IGNORECASE):
             return rank
     return None
+
+
+def match_non_code_labels(names: list[str]) -> list[str]:
+    """Repo labels for docs, typo, test and translation work (beginner labels excluded)."""
+    return sorted((n for n in names if NON_CODE_LABEL_RE.search(n)
+                   and not EXCLUDED_LABELS.search(n) and label_rank(n) is None), key=str.lower)
 
 
 def match_beginner_labels(names: list[str]) -> list[str]:
@@ -211,27 +223,50 @@ def find_issues(
         seen = {i["number"] for i in items}
         items += [i for i in found if i["number"] not in seen]
         queries.append(q)
+    # Docs, typo, test and translation issues are lower-risk first PRs: look for them too,
+    # even when they carry no beginner label.
+    non_code = match_non_code_labels(all_labels)
+    extra: list[dict[str, Any]] = []
+    if non_code:
+        try:
+            found, q = search_issues(owner, repo, non_code, per_page)
+        except GitHubError:  # e.g. the search rate limit: the beginner issues still count
+            found, q = [], ""
+        seen = {i["number"] for i in items}
+        extra = [i for i in found if i["number"] not in seen]
+        queries += [q] if q else []
     query = " | ".join(queries)
     candidates, skipped = filter_issues(items)
+    extra, skipped_extra = filter_issues(extra)
+    skipped += skipped_extra
 
     claims: dict[int, dict[str, Any] | None] = {}
-    available: list[dict[str, Any]] = []
     since = (now - timedelta(days=claim_days)).strftime("%Y-%m-%dT%H:%M:%SZ")
-    for issue in candidates:
-        if len(available) >= limit:
-            break
-        if check_comments and issue.get("comments", 0) > 0:
-            comments = api_get(f"/repos/{owner}/{repo}/issues/{issue['number']}/comments",
-                               {"since": since, "per_page": 100})
-            claims[issue["number"]] = find_claim(comments, now, claim_days)
-        kept, dropped = filter_issues([issue], claims)
-        available += kept
-        skipped += dropped
+
+    def take(pool: list[dict[str, Any]], cap: int) -> list[dict[str, Any]]:
+        """Up to `cap` issues from `pool` that nobody has recently claimed."""
+        got: list[dict[str, Any]] = []
+        for issue in pool:
+            if len(got) >= cap:
+                break
+            if check_comments and issue.get("comments", 0) > 0:
+                comments = api_get(f"/repos/{owner}/{repo}/issues/{issue['number']}/comments",
+                                   {"since": since, "per_page": 100})
+                claims[issue["number"]] = find_claim(comments, now, claim_days)
+            kept, dropped = filter_issues([issue], claims)
+            got += kept
+            skipped.extend(dropped)
+        return got
+
+    reserved = min(len(extra), max(1, limit // NON_CODE_SHARE)) if extra else 0
+    available = take(candidates, limit - reserved)
+    available += take(extra, limit - len(available))
 
     return {
         "repo": f"{owner}/{repo}",
         "query": query,
         "labels_used": labels,
+        "non_code_labels_used": non_code,
         "note": note,
         "comment_check": check_comments,
         "issues": [summarize_issue(i, now) for i in available],

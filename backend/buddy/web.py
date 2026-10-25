@@ -17,9 +17,16 @@ from pathlib import Path
 from typing import Any
 
 from buddy import citations, coach, llm, rag
-from buddy.cli import analyze_facts, apply_refinement, issues_facts, merge_ranking, plan_facts
+from buddy.cli import (
+    analyze_facts,
+    annotate_issues,
+    apply_refinement,
+    issues_facts,
+    merge_ranking,
+    plan_facts,
+)
 from buddy.providers import Provider, ProviderError, get_provider
-from buddy.skill import GitHubError, github, issues, planner, ranker, repo_docs
+from buddy.skill import GitHubError, discovery, github, issues, matcher, planner, ranker, repo_docs
 
 CHAT_HISTORY_TURNS = 10  # messages of earlier conversation sent with each question
 
@@ -84,8 +91,9 @@ def api_issues(body: dict[str, Any]) -> dict[str, Any]:
     limit = body.get("limit", 8)
     if not isinstance(limit, int) or not 1 <= limit <= 30:
         raise ApiError("'limit' must be a number from 1 to 30.")
+    skills = _skills(body.get("skills"))
     found = issues.find_issues(_text(body, "repo"), limit, 14, True)
-    ranked = ranker.rank_issues(found["issues"])
+    ranked = annotate_issues(found, ranker.rank_issues(found["issues"]), skills or None)
     provider, ai_error = maybe_provider(bool(body.get("ai", True)))
     ai = None
     if provider and ranked:
@@ -96,9 +104,36 @@ def api_issues(body: dict[str, Any]) -> dict[str, Any]:
             )
         except (ProviderError, llm.LLMError) as exc:
             ai_error = f"{exc} Showing the heuristic ranking instead."
-    return {**found, "issues": merge_ranking(ranked, ai),
+    return {**found, "issues": merge_ranking(ranked, ai), "skills": skills,
+            # The page re-matches issues instantly when the user edits their skills.
+            "skill_aliases": matcher.ALIASES,
             "recommendation": (ai or {}).get("recommendation"),
             "ai_error": ai_error, "model": provider.model if provider and ai else None}
+
+
+def _skills(value: Any) -> list[str]:
+    """Skills from a request: a list of names or one comma-separated string."""
+    if isinstance(value, str):
+        return matcher.normalize_skills(value[:500])
+    if isinstance(value, list):
+        return matcher.normalize_skills([v for v in value[:30] if isinstance(v, str)])
+    return []
+
+
+def api_discover(body: dict[str, Any]) -> dict[str, Any]:
+    """Welcoming repos for the user's languages and interests, ranked by health."""
+    limit = body.get("limit", 6)
+    if not isinstance(limit, int) or not 1 <= limit <= 10:
+        raise ApiError("'limit' must be a number from 1 to 10.")
+    interests = body.get("interests", "")
+    if isinstance(interests, list):
+        interests = ", ".join(i for i in interests if isinstance(i, str))
+    if not isinstance(interests, str):
+        raise ApiError("'interests' must be text or a list of text.")
+    languages = _skills(body.get("languages"))
+    if not languages and not interests.strip():
+        raise ApiError("Tell me at least one language or interest.")
+    return discovery.discover_repos(languages, interests[:300], limit)
 
 
 def api_plan(body: dict[str, Any]) -> dict[str, Any]:
@@ -236,7 +271,7 @@ def api_tree(body: dict[str, Any]) -> dict[str, Any]:
 
 ROUTES = {"/api/analyze": api_analyze, "/api/issues": api_issues, "/api/plan": api_plan,
           "/api/chat": api_chat, "/api/tree": api_tree, "/api/index": api_index,
-          "/api/coach": api_coach}
+          "/api/coach": api_coach, "/api/discover": api_discover}
 
 
 # --- HTTP plumbing ----------------------------------------------------------------

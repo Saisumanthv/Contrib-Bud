@@ -4,7 +4,9 @@ import './App.css';
 import { API_URL, fetchTree, githubFileUrl } from './api';
 import CitationReport from './CitationReport';
 import ClaimCheck from './ClaimCheck';
+import Discover from './Discover';
 import PRCoach from './PRCoach';
+import { CONTRIBUTION_ICONS, FIT_LABELS, loadSkills, saveSkills, skillFit } from './skills';
 import { citationComponents, markCitations } from './citationLinks';
 import HealthBadge from './HealthBadge';
 import SimilarPRs from './SimilarPRs';
@@ -63,6 +65,8 @@ export default function App() {
     const [summaryRetrying, setSummaryRetrying] = useState(false);
     const request = useRef(null); // AbortController of the analysis in progress
     const [activeTab, setActiveTab] = useState('issues');
+    const [skillsText, setSkillsText] = useState(loadSkills);
+    const [nonCodeOnly, setNonCodeOnly] = useState(false);
     const [tree, setTree] = useState(null);
     const [treeLoading, setTreeLoading] = useState(false);
     const [treeError, setTreeError] = useState('');
@@ -163,7 +167,7 @@ export default function App() {
 
     // Loaders fetch and return a function that shows the result; run() only calls it if the
     // request wasn't cancelled in the meantime.
-    const loadRepo = async (repo, signal) => {
+    const loadRepo = async (repo, signal, skills = skillsText) => {
         const [analyzeRes, issuesRes] = await Promise.all([
             fetch(`${API_URL}/api/analyze`, {
                 method: 'POST',
@@ -174,7 +178,8 @@ export default function App() {
             fetch(`${API_URL}/api/issues`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ repo, ai: true }),
+                // Skills let the model favour issues the user can actually do.
+                body: JSON.stringify({ repo, ai: true, skills }),
                 signal
             })
         ]);
@@ -257,6 +262,28 @@ export default function App() {
     };
 
     const kind = linkKind(query);
+
+    const updateSkills = text => {
+        setSkillsText(text);
+        saveSkills(text);
+    };
+
+    const openDiscover = () => {
+        request.current?.abort();
+        setRepoView(null);
+        setStarted(true);
+        setLoading(false);
+        setError('');
+        setIssues(null);
+        setData({ type: 'discover' });
+    };
+
+    const analyzeRepo = repo => {
+        const skills = loadSkills(); // the discover form may have just saved new skills
+        setSkillsText(skills);
+        setQuery(`https://github.com/${repo}.git`);
+        run(signal => loadRepo(repo, signal, skills));
+    };
 
     const handleSubmit = (e) => {
         e.preventDefault();
@@ -377,6 +404,13 @@ export default function App() {
                         Enter a GitHub repo link ending in <code>.git</code>, like <code>https://github.com/facebook/react.git</code>, a link to one of its issues, or a link to your pull request for the PR coach.
                     </p>
                 )}
+                {data?.type !== 'discover' && (
+                    <p className="discover-link">
+                        <button type="button" className="link-button" onClick={openDiscover}>
+                            🔭 No repo in mind? Find one that fits your skills
+                        </button>
+                    </p>
+                )}
 
                 {error && (
                     <div className="glass error-box animate-in" style={{ animationDelay: '0.1s' }}>
@@ -404,7 +438,15 @@ export default function App() {
 
                 {data && !loading && (
                     <div className="glass result-box animate-in" style={{ animationDelay: '0.1s' }}>
-                        {data.type === 'coach' ? (
+                        {data.type === 'discover' ? (
+                            <div>
+                                <h2>🔭 Find a repo to contribute to</h2>
+                                <p className="subtitle">
+                                    Tell us what you know and like. We suggest active projects with open beginner issues, most welcoming first.
+                                </p>
+                                <Discover onAnalyze={analyzeRepo} />
+                            </div>
+                        ) : data.type === 'coach' ? (
                             <div>
                                 <h2>🩺 PR coach</h2>
                                 <p className="subtitle">
@@ -529,26 +571,66 @@ export default function App() {
 
                                 {activeTab === 'issues' && issues && issues.issues && issues.issues.length > 0 && (
                                     <div className="issues-section">
-                                        <p className="issues-hint">Click on any issue below to automatically generate a step-by-step contribution plan!</p>
+                                        <div className="issue-controls">
+                                            <label className="skills-field">
+                                                <span className="label">Your skills</span>
+                                                <input
+                                                    className="coach-input"
+                                                    placeholder="e.g. python, react, css"
+                                                    value={skillsText}
+                                                    onChange={e => updateSkills(e.target.value)}
+                                                />
+                                            </label>
+                                            <div className="filter-chips" role="group" aria-label="Show issues">
+                                                <button type="button" className={`chip ${!nonCodeOnly ? 'active' : ''}`} aria-pressed={!nonCodeOnly} onClick={() => setNonCodeOnly(false)}>
+                                                    All
+                                                </button>
+                                                <button type="button" className={`chip ${nonCodeOnly ? 'active' : ''}`} aria-pressed={nonCodeOnly} onClick={() => setNonCodeOnly(true)}>
+                                                    📄 Non-code only ({issues.issues.filter(i => i.contribution?.low_risk).length})
+                                                </button>
+                                            </div>
+                                        </div>
+                                        <p className="issues-hint">
+                                            Click on any issue below to automatically generate a step-by-step contribution plan!
+                                            Docs, typo, test and translation issues are lower-risk first PRs.
+                                        </p>
                                         <div className="issues-list">
-                                            {issues.issues.map(issue => (
-                                                <div
-                                                    key={issue.number}
-                                                    className={`issue-card ${issue.number === issues.recommendation?.number ? 'recommended' : ''}`}
-                                                    onClick={() => handleIssueClick(issue.url)}
-                                                >
-                                                    {issue.number === issues.recommendation?.number && (
-                                                        <div className="recommended-badge">✨ Recommended for you</div>
-                                                    )}
-                                                    <h4>#{issue.number} {issue.title}</h4>
-                                                    <div className="issue-tags">
-                                                        {(issue.labels || []).map(label => (
-                                                            <span key={label} className="tag">{label}</span>
-                                                        ))}
+                                            {issues.issues.filter(i => !nonCodeOnly || i.contribution?.low_risk).map(issue => {
+                                                const match = skillsText.trim() ? skillFit(issue.techs, skillsText, issues.skill_aliases) : null;
+                                                return (
+                                                    <div
+                                                        key={issue.number}
+                                                        className={`issue-card ${issue.number === issues.recommendation?.number ? 'recommended' : ''}`}
+                                                        onClick={() => handleIssueClick(issue.url)}
+                                                    >
+                                                        {issue.number === issues.recommendation?.number && (
+                                                            <div className="recommended-badge">✨ Recommended for you</div>
+                                                        )}
+                                                        <h4>#{issue.number} {issue.title}</h4>
+                                                        <div className="issue-tags">
+                                                            {issue.contribution && (
+                                                                <span className={`tag kind-tag ${issue.contribution.low_risk ? 'low-risk' : ''}`} title={issue.contribution.low_risk ? `Lower-risk first PR: ${issue.contribution.reason}` : issue.contribution.reason}>
+                                                                    {CONTRIBUTION_ICONS[issue.contribution.type]} {issue.contribution.label}
+                                                                </span>
+                                                            )}
+                                                            {match && match.fit !== 'any' && (
+                                                                <span className={`tag fit-tag fit-${match.fit}`} title={`Needs ${issue.techs.join(', ')}`}>
+                                                                    {FIT_LABELS[match.fit]}{match.missing.length > 0 ? `: needs ${match.missing.join(', ')}` : ''}
+                                                                </span>
+                                                            )}
+                                                            {!match && issue.techs?.length > 0 && (
+                                                                <span className="tag" title="Technologies this issue probably needs">
+                                                                    Needs {issue.techs.join(', ')}
+                                                                </span>
+                                                            )}
+                                                            {(issue.labels || []).map(label => (
+                                                                <span key={label} className="tag">{label}</span>
+                                                            ))}
+                                                        </div>
+                                                        <p className="issue-desc">{issue.ai?.explanation || issue.heuristic?.reasons?.[0]}</p>
                                                     </div>
-                                                    <p className="issue-desc">{issue.ai?.explanation || issue.heuristic?.reasons?.[0]}</p>
-                                                </div>
-                                            ))}
+                                                );
+                                            })}
                                         </div>
                                     </div>
                                 )}

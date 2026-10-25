@@ -28,5 +28,7 @@ ranker = _load("rank_issues")
 planner = _load("plan_contribution")
 prechecker = _load("precheck_pr")
 coach = _load("pr_coach")
+matcher = _load("match_skills")
+discovery = _load("discover_repos")
 
 GitHubError = github.GitHubError

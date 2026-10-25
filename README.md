@@ -46,6 +46,7 @@ flowchart LR
       F7[similar_prs.py<br/>merged PRs that fixed similar issues]
       F8[claim_check.py<br/>overlapping work, questions to ask]
       F9[pr_coach.py<br/>review threads, failing checks, CI logs]
+      F10[discover_repos.py + match_skills.py<br/>repos and issues that fit your skills]
       F5[precheck_pr.py<br/>pre-PR checklist]
     end
     S -->|GitHub REST API +<br/>raw.githubusercontent.com| GH[(GitHub)]
@@ -59,11 +60,24 @@ flowchart LR
 
 | Command | Facts (scripts) | Model's job |
 |---|---|---|
+| `buddy discover -l "python, react" -i "cli, games"` | Active repos with open beginner issues in your languages and interests, each with a quick health check | – (ranked Welcoming first by rules) |
 | `buddy analyze <owner/repo>` | README, CONTRIBUTING, templates, stack, test/lint commands, rules, plus a **repo health** badge (Welcoming / Slow / Inactive) | Plain-English "how to contribute here", leading with health warnings |
 | `buddy issues <owner/repo>` | Beginner-labelled issues minus assigned / linked-PR / recently claimed; heuristic scores | Rank, explain each issue, recommend one |
 | `buddy plan <issue-url>` | Branch name, setup/test commands, **similar merged PRs** (files, size, review), likely files, commit style, PR template | Issue-specific approach, PR summary, claim comment with issue-specific questions |
 | `buddy check` | Diff size, commit style, DCO, issue link, PR template, runs lint/tests | Explain each failure and how to fix it |
 | `buddy coach [<pr-url>] [--text log.txt]` | Review threads, reviewer verdicts, failing checks with annotations and logs, parsed errors, conflicts | Explain what reviewers and CI want, the fix for each, and a reply draft |
+
+### Discovery and matching: where should I contribute?
+
+- **Find a repo** (🔭 under the search box, or `buddy discover`): enter the languages you know and what you're interested in. [`discover_repos.py`](backend/contrib-buddy/scripts/discover_repos.py) searches GitHub for repos that:
+  - are public and not archived,
+  - were pushed in the last 60 days,
+  - have at least 20 stars and 2 open "good first issue" issues,
+  - match your languages and interests (whole words, so "cli" doesn't match "climate").
+
+  It then runs a quick health check on the best matches and ranks them **Welcoming** first.
+- **Non-code issues:** the issue finder also searches the repo's docs, typo, test and translation labels, and keeps up to a third of the results for them. Every issue is labelled 📄 Docs, ✏️ Typo, 🧪 Tests, 🌐 Translation or 💻 Code; the non-code ones are marked as lower-risk first PRs, and the list can show non-code issues only.
+- **Skill matching:** [`match_skills.py`](backend/contrib-buddy/scripts/match_skills.py) works out the technologies each issue probably needs (from labels, file names, code blocks and wording, falling back to the repo's main language). It compares them with the skills you enter ("js, React.js, golang" all count) and shows **Good fit**, **Partial fit: needs TypeScript** or **Stretch**. Your skills are remembered in the browser, and the AI ranking favours issues you can do.
 
 ### Repo health: is this repo worth my time?
 

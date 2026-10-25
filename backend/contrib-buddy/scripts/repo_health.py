@@ -221,9 +221,11 @@ def _count(query: str) -> int | None:
 def repo_health(
     repo_arg: str, meta: dict[str, Any] | None = None, paths: set[str] | None = None,
     workflows: dict[str, str] | None = None, now: datetime | None = None,
+    timeline_sample: int = TIMELINE_SAMPLE,
 ) -> dict[str, Any]:
     """Assess maintainer responsiveness. `meta`, `paths` and `workflows` can be passed in
-    by fetch_repo_docs to avoid fetching them twice. See module docstring."""
+    by fetch_repo_docs to avoid fetching them twice; pass `paths=set()` and a smaller
+    `timeline_sample` for a quicker check (as repo discovery does). See module docstring."""
     owner, repo = parse_repo(repo_arg)
     now = now or datetime.now(UTC)
     if meta is None:
@@ -251,8 +253,8 @@ def repo_health(
     # PRs old enough to judge: each was either answered or has waited UNANSWERED_DAYS.
     cutoff = now - timedelta(days=UNANSWERED_DAYS)
     old_enough = [p for p in outside if (t := _parse_time(p.get("created_at"))) and t <= cutoff]
-    sample = (old_enough or outside)[:TIMELINE_SAMPLE]
-    with ThreadPoolExecutor(max_workers=TIMELINE_SAMPLE) as pool:
+    sample = (old_enough or outside)[:timeline_sample]
+    with ThreadPoolExecutor(max_workers=max(1, timeline_sample)) as pool:
         timelines = list(pool.map(
             lambda p: api_get(f"/repos/{owner}/{repo}/issues/{p['number']}/timeline",
                               {"per_page": 100}), sample))

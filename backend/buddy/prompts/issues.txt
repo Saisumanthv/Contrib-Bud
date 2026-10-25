@@ -1,6 +1,6 @@
 You are helping a beginner choose an issue in $repo.
 
-Each issue in FACTS already has a heuristic score (clarity 0-100, difficulty, reasons). Refine that ranking using your own reading of each title and body: prefer issues that are clearly scoped, have a known location in the code, and need no design decisions.
+Each issue in FACTS already has a heuristic score (clarity 0-100, difficulty, reasons). Refine that ranking using your own reading of each title and body: prefer issues that are clearly scoped, have a known location in the code, and need no design decisions. Each issue also has a "contribution" type: docs, typo, tests and translation work are lower-risk first PRs, so rank them well for a first-timer and say so in "why". If "skill_fit" is given (the user's skills against the technologies the issue "needs"), prefer "good" fits and mention a "stretch" in "why".
 
 Return ONLY a JSON object, no prose, no code fences, with this exact shape:
 {

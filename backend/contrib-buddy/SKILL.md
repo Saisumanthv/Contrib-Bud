@@ -23,6 +23,12 @@ Run scripts from the skill root with `python scripts/<name>.py`. All take `--hel
 
 ## Workflow
 
+### 0. No repo yet? Find one
+```
+python scripts/discover_repos.py --languages "python, react" --interests "cli, games"
+```
+Returns active repos (pushed in the last 60 days, not archived, with open "good first issue" issues) matching the user's languages and interests, each with a quick `health` check, Welcoming first. Present the top few with why they match (`matched_languages`, `matched_interests`) and their health `label`/`summary`, then continue with step 1 for the one the user picks.
+
 ### 1. Understand the repo
 ```
 python scripts/fetch_repo_docs.py OWNER/REPO
@@ -34,9 +40,10 @@ Start with `health`: its `label` (Welcoming / Slow / Inactive / Not enough data)
 ### 2. Find an issue
 ```
 python scripts/find_issues.py OWNER/REPO --limit 10 > issues.json
-python scripts/rank_issues.py issues.json
+python scripts/rank_issues.py issues.json > ranked.json
+python scripts/match_skills.py ranked.json --skills "what the user knows"
 ```
-`find_issues.py` already removes assigned issues, issues with a linked PR, and issues with a recent "I'll take this" comment. `rank_issues.py` adds a heuristic `clarity` score (0–100) and `difficulty` (easy/medium/hard) with `reasons`. Refine that ranking with your own reading of each issue, explain the top 3 in one or two sentences each, and recommend one. Do not invent issues that are not in the JSON.
+`find_issues.py` already removes assigned issues, issues with a linked PR, and issues with a recent "I'll take this" comment, and also searches docs/typo/test/translation labels. `match_skills.py` adds each issue's `contribution` type (non-code types are `low_risk`: point them out as safer first PRs), the `techs` it probably needs and, with `--skills`, a `skill_match` (`good` / `partial` / `stretch`, plus what's `missing`). Ask the user what they know if they haven't said, and prefer issues that fit. `rank_issues.py` adds a heuristic `clarity` score (0–100) and `difficulty` (easy/medium/hard) with `reasons`. Refine that ranking with your own reading of each issue, explain the top 3 in one or two sentences each, and recommend one. Do not invent issues that are not in the JSON.
 
 ### 3. Plan the contribution
 ```

@@ -85,3 +85,41 @@ def test_find_issues_end_to_end_with_mocked_api(monkeypatch):
     assert numbers == [101, 104]  # 102 claimed by a human, 103 assigned; bot comment ignored
     skipped = {s["number"] for s in result["skipped"]}
     assert skipped == {102, 103}
+
+
+def test_non_code_labels_are_found_and_get_reserved_slots(monkeypatch):
+    names = ["good first issue", "documentation", "i18n", "needs tests", "bug", "docs-accepted"]
+    assert fi.match_non_code_labels(names) == ["documentation", "i18n", "needs tests"]
+
+    def issue(number, title):
+        return {"number": number, "title": title, "labels": [], "assignees": [], "comments": 0,
+                "created_at": "2026-09-20T00:00:00Z", "html_url": f"u/{number}", "body": ""}
+
+    beginner = [issue(n, f"Code task {n}") for n in range(1, 10)]
+    non_code = [issue(50, "Translate the help page"), issue(51, "Document the CLI flags")]
+
+    def fake(path, params=None, **kw):
+        if path.endswith("/labels"):
+            return [{"name": n} for n in names]
+        if "documentation" in params["q"]:  # the non-code search
+            return {"items": non_code}
+        return {"items": beginner}
+
+    monkeypatch.setattr(fi, "api_get", fake)
+    result = fi.find_issues("acme/widgets", limit=6, now=NOW)
+    numbers = [i["number"] for i in result["issues"]]
+    assert numbers == [1, 2, 3, 4, 50, 51]  # 6 // 3 = 2 slots kept for non-code work
+    assert result["non_code_labels_used"] == ["documentation", "i18n", "needs tests"]
+
+
+def test_failed_non_code_search_does_not_break_the_list(monkeypatch):
+    def fake(path, params=None, **kw):
+        if path.endswith("/labels"):
+            return [{"name": "good first issue"}, {"name": "documentation"}]
+        if "documentation" in params["q"]:
+            raise fi.GitHubError("GitHub API rate limit reached.")
+        return {"items": [{"number": 1, "title": "t", "labels": [], "assignees": [],
+                           "comments": 0, "created_at": "2026-09-20T00:00:00Z"}]}
+
+    monkeypatch.setattr(fi, "api_get", fake)
+    assert [i["number"] for i in fi.find_issues("acme/widgets", now=NOW)["issues"]] == [1]

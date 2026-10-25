@@ -10,6 +10,7 @@ from buddy.web import (
     api_plan,
     api_chat,
     api_coach,
+    api_discover,
     api_index,
     api_tree,
     provider_status,
@@ -65,6 +66,10 @@ def plan(body: dict):
 @app.post("/api/chat")
 def chat(body: dict):
     return api_chat(body)
+
+@app.post("/api/discover")
+def discover_endpoint(body: dict):
+    return api_discover(body)
 
 @app.post("/api/coach")
 def coach_endpoint(body: dict):

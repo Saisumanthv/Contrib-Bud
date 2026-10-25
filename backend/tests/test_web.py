@@ -39,6 +39,30 @@ def fake_issues(monkeypatch):
              "note": None}
     monkeypatch.setattr(web.issues, "find_issues", lambda *a: found)
     monkeypatch.setattr(web.ranker, "rank_issues", lambda items: items)
+    monkeypatch.setattr(web.github, "api_get", lambda path, params=None, **kw: {"Rust": 90, "Shell": 10})
+
+
+def test_issues_have_types_and_skill_fit(fake_issues, monkeypatch):
+    monkeypatch.setattr(web, "get_provider", lambda: pytest.fail("model should not be built"))
+    data = web.api_issues({"repo": "o/r", "ai": False, "skills": "python, bash"})
+    first = data["issues"][0]
+    assert first["contribution"]["type"] == "code"
+    assert first["techs"] == ["Rust"]  # the issue names nothing: the repo's main language
+    assert first["skill_match"] == {"fit": "stretch", "known": [], "missing": ["Rust"]}
+    assert data["skills"] == ["Python", "Shell"] and data["skill_aliases"]["golang"] == "Go"
+    assert "skill_match" not in web.api_issues({"repo": "o/r", "ai": False})["issues"][0]
+
+
+def test_discover_validates_and_normalizes(monkeypatch):
+    seen = {}
+    monkeypatch.setattr(web.discovery, "discover_repos",
+                        lambda langs, interests, limit: seen.update(args=(langs, interests, limit)) or {})
+    web.api_discover({"languages": ["js", "golang"], "interests": ["cli", "games"]})
+    assert seen["args"] == (["JavaScript", "Go"], "cli, games", 6)
+    with pytest.raises(web.ApiError):
+        web.api_discover({"languages": [], "interests": " "})
+    with pytest.raises(web.ApiError):
+        web.api_discover({"languages": "python", "limit": 50})
 
 
 def test_issues_uses_model_ranking(fake_issues, monkeypatch):

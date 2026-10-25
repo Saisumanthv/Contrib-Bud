@@ -21,7 +21,17 @@ from rich.table import Table
 
 from buddy import llm
 from buddy.providers import Provider, ProviderError, get_provider
-from buddy.skill import GitHubError, issues, planner, prechecker, ranker, repo_docs
+from buddy.skill import (
+    GitHubError,
+    discovery,
+    github,
+    issues,
+    matcher,
+    planner,
+    prechecker,
+    ranker,
+    repo_docs,
+)
 
 app = typer.Typer(
     add_completion=False,
@@ -203,12 +213,24 @@ def analyze(
 
 # --- issues ---------------------------------------------------------------------
 
+def annotate_issues(found: dict[str, Any], ranked: list[dict[str, Any]],
+                    skills: list[str] | None) -> list[dict[str, Any]]:
+    """Add each issue's contribution type, the technologies it needs and, with skills, the fit."""
+    try:  # cached from analyze; only a fallback when an issue names no technology
+        langs = github.api_get(f"/repos/{found['repo']}/languages")
+        repo_languages = sorted(langs, key=lambda k: -langs[k])
+    except GitHubError:
+        repo_languages = []
+    return matcher.annotate(ranked, repo_languages, skills)
+
+
 def issues_facts(ranked: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """Compact issue data for the ranking prompt."""
     return [
         {"number": i["number"], "title": i["title"], "labels": i["labels"],
          "age_days": i["age_days"], "comments": i["comments"], "body": i["body"][:1200],
-         "heuristic": i["heuristic"]}
+         "heuristic": i["heuristic"], "contribution": i.get("contribution", {}).get("type"),
+         "needs": i.get("techs"), "skill_fit": (i.get("skill_match") or {}).get("fit")}
         for i in ranked
     ]
 
@@ -232,6 +254,8 @@ def issues_cmd(
     limit: int = typer.Option(8, "--limit", "-n", min=1, max=30, help="How many issues to show."),
     no_comment_check: bool = typer.Option(False, "--no-comment-check",
                                           help="Skip per-issue claim checks (fewer API calls)."),
+    skills: str = typer.Option("", "--skills", "-s",
+                               help='What you know, e.g. "python, react", to match issues.'),
     no_ai: bool = typer.Option(False, "--no-ai", help=NO_AI_HELP),
     as_json: bool = typer.Option(False, "--json", help="Print machine-readable JSON."),
 ) -> None:
@@ -242,7 +266,8 @@ def issues_cmd(
             found = issues.find_issues(repo, limit, 14, not no_comment_check)
     except GitHubError as exc:
         fail(str(exc))
-    ranked = ranker.rank_issues(found["issues"])
+    known = matcher.normalize_skills(skills) if skills else None
+    ranked = annotate_issues(found, ranker.rank_issues(found["issues"]), known)
     ai, ai_error = None, None
     if provider and ranked:
         try:
@@ -271,15 +296,23 @@ def issues_cmd(
     table = Table(title=f"Available issues in {found['repo']}", title_justify="left",
                   header_style="bold", show_lines=False)
     for col, kw in (("#", {"justify": "right"}), ("Title", {"overflow": "fold", "ratio": 3}),
-                    ("Level", {}), ("Clarity", {"justify": "right"}), ("Age", {"justify": "right"}),
+                    ("Type", {}), ("Level", {}), ("Fit", {}),
+                    ("Clarity", {"justify": "right"}), ("Age", {"justify": "right"}),
                     ("💬", {"justify": "right"})):
         table.add_column(col, **kw)
     level_style = {"easy": "green", "medium": "yellow", "hard": "red"}
+    fit_style = {"good": "green", "partial": "yellow", "stretch": "red", "any": "dim"}
     for issue in final:
         level = issue.get("ai", {}).get("difficulty") or issue["heuristic"]["difficulty"]
+        kind = issue["contribution"]
+        kind_text = f"[green]{kind['label']}[/]" if kind["low_risk"] else kind["label"]
+        match = issue.get("skill_match")
+        fit = f"[{fit_style[match['fit']]}]{match['fit']}[/]" if match else \
+            esc(", ".join(issue["techs"][:2]) or "–")
         table.add_row(f"[link={issue['url']}]{issue['number']}[/link]", esc(issue["title"]),
-                      f"[{level_style[level]}]{level}[/]", str(issue["heuristic"]["clarity"]),
-                      f"{issue['age_days']}d", str(issue["comments"]))
+                      kind_text, f"[{level_style[level]}]{level}[/]", fit,
+                      str(issue["heuristic"]["clarity"]), f"{issue['age_days']}d",
+                      str(issue["comments"]))
     console.print(table)
     if found["note"]:
         console.print(f"[dim]{found['note']}[/]")
@@ -447,6 +480,42 @@ def check(
     else:
         next_step("Fix the ✘ items above, commit, and run [bold]buddy check[/] again.")
     raise typer.Exit(0 if result["ready"] else 1)
+
+
+@app.command()
+def discover(
+    languages: str = typer.Option("", "--languages", "-l", help='e.g. "python, typescript"'),
+    interests: str = typer.Option("", "--interests", "-i", help='e.g. "cli, data viz, games"'),
+    limit: int = typer.Option(6, "--limit", "-n", min=1, max=10, help="Repos to suggest."),
+    as_json: bool = typer.Option(False, "--json", help="Print machine-readable JSON."),
+) -> None:
+    """Suggest welcoming repos to contribute to, from your languages and interests."""
+    if not languages.strip() and not interests.strip():
+        fail("Tell me what you know or like.", 'Example: buddy discover -l python -i "cli, games"')
+    try:
+        with console.status("Searching GitHub and checking how welcoming each repo is…"):
+            found = discovery.discover_repos(languages, interests, limit)
+    except GitHubError as exc:
+        fail(str(exc))
+    if as_json:
+        dump(found)
+        return
+    if not found["repos"]:
+        console.print("[yellow]No active repos with open beginner issues matched. Try broader "
+                      "interests or another language.[/]")
+        return
+    for n, r in enumerate(found["repos"], 1):
+        health = r["health"]
+        style = HEALTH_STYLE.get(health.get("verdict"), "dim")
+        matched = ", ".join(r["matched_languages"] + r["matched_interests"]) or "–"
+        body = (f"{esc(r['description'] or '')}\n⭐ {r['stars']}  ·  {r['language'] or '?'}  ·  "
+                f"matches: {esc(matched)}\n[{style}]● {health['label']}[/] "
+                f"{esc(health.get('summary') or health.get('error') or '')}\n"
+                f"Good first issues: {r['good_first_issues_url']}")
+        console.print(Panel(body, title=f"{n}. [bold]{r['repo']}[/]", title_align="left",
+                            border_style=style))
+    top = found["repos"][0]["repo"]
+    next_step(f"Pick one and see how to contribute:  [bold]buddy analyze {top}[/]")
 
 
 @app.command(name="coach")
