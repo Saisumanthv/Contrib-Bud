@@ -22,27 +22,32 @@ $lint_section
 ## 3. Contribution rules for this repo
 $rules
 
-## 4. Likely files to look at
+## 4. Learn from similar merged PRs
+Issues like this one that were already fixed. Open the PRs to see how big a change is welcome and what reviewers asked for.
+
+$similar_prs
+
+## 5. Likely files to look at
 $likely_files
 
-## 5. Approach
+## 6. Approach
 $approach
 
-## 6. Commit
+## 7. Commit
 ```bash
 git add -p
 git commit $commit_flags-m "$commit_message"
 git push -u origin $branch
 ```
 
-## 7. PR description draft
+## 8. PR description draft
 Open a PR from `$branch` against `$repo:$default_branch` and paste:
 
 ````markdown
 $pr_description
 ````
 
-## 8. Before you click "Create pull request"
+## 9. Before you click "Create pull request"
 Run the pre-PR checklist in your clone:
 ```bash
 python <path-to>/contrib-buddy/scripts/precheck_pr.py --base upstream/$default_branch

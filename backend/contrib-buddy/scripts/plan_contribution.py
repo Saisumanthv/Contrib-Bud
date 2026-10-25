@@ -6,9 +6,11 @@ Usage:
 
 Combines the issue, the repo's docs/stack/rules (fetch_repo_docs.py) and the
 recent commit history to produce: fork/clone/branch commands, setup and test
-commands, contribution rules, likely files to touch (keyword search over the
-repo tree), a commit message in the project's style, and a PR description
-built from the repo's PR template. Prints Markdown (or JSON with --json).
+commands, contribution rules, similar issues and the merged PRs that fixed them
+(similar_prs.py), likely files to touch (files those PRs changed first, then a
+keyword search over the repo tree), a commit message in the project's style,
+and a PR description built from the repo's PR template. Prints Markdown (or
+JSON with --json).
 """
 
 from __future__ import annotations
@@ -21,6 +23,7 @@ from typing import Any
 
 from _github import GitHubError, api_get, emit_json, emit_text, parse_issue_url, run_cli
 from fetch_repo_docs import fetch_repo_docs, fetch_tree
+from similar_prs import find_similar_prs, issue_keywords
 
 ASSETS = Path(__file__).resolve().parent.parent / "assets"
 
@@ -203,7 +206,21 @@ def find_likely_files(text: str, paths: set[str], limit: int = 8) -> list[dict[s
         if score >= MIN_FILE_SCORE:
             scored.append((round(score, 1), path, hits))
     scored.sort(key=lambda s: (-s[0], len(s[1])))
-    return [{"path": p, "score": s, "matched": sorted(set(h))[:5]} for s, p, h in scored[:limit]]
+    return [{"path": p, "score": s, "matched": sorted(set(h))[:5], "source": "path match"}
+            for s, p, h in scored[:limit]]
+
+
+def merge_likely_files(history: list[dict[str, Any]], matched: list[dict[str, Any]],
+                       limit: int = 8) -> list[dict[str, Any]]:
+    """Files that similar merged PRs changed come first (real evidence; most PRs, then
+    source before tests and docs), then path matches."""
+    ranked = sorted(history, key=lambda h: (-len(h["prs"]),
+                                            bool(SECONDARY_PATHS.search(h["path"].lower()))))
+    out = [{"path": h["path"], "prs": h["prs"], "matched": [], "source": "history"}
+           for h in ranked]
+    seen = {f["path"] for f in out}
+    out += [f for f in matched if f["path"] not in seen]
+    return out[:limit]
 
 
 def fill_pr_template(template: str | None, number: int, title: str, test_cmd: str) -> str:
@@ -267,7 +284,7 @@ def plan_contribution(issue_url: str) -> dict[str, Any]:
         who = ", ".join("@" + a["login"] for a in issue["assignees"])
         warnings.append(f"This issue is assigned to {who}. Ask before working on it.")
 
-    repo_info = fetch_repo_docs(f"{owner}/{repo}")
+    repo_info = fetch_repo_docs(f"{owner}/{repo}", health=False)
     owner, repo = repo_info["repo"].split("/")
     branch_default = repo_info["default_branch"]
     paths, _ = fetch_tree(owner, repo, branch_default)
@@ -288,7 +305,14 @@ def plan_contribution(issue_url: str) -> dict[str, Any]:
     templates = repo_info["docs"]["pr_templates"]
     pr_template = templates[0]["content"] if templates else None
     pr_description = fill_pr_template(pr_template, number, title, test_cmd)
-    likely = find_likely_files(f"{title}\n{issue.get('body') or ''}", paths)
+    body = issue.get("body") or ""
+    try:
+        similar = find_similar_prs(owner, repo, number,
+                                   issue_keywords(title, body, extract_keywords), labels, paths)
+    except GitHubError as exc:  # e.g. search rate limit: the rest of the plan still works
+        similar = {"examples": [], "history_files": [], "error": str(exc)}
+    likely = merge_likely_files(similar["history_files"],
+                                find_likely_files(f"{title}\n{body}", paths))
 
     data = {
         "repo": repo_info["repo"],
@@ -302,6 +326,7 @@ def plan_contribution(issue_url: str) -> dict[str, Any]:
         "stack": stack,
         "rules": rules,
         "likely_files": likely,
+        "similar_prs": similar,
         "pr_description": pr_description,
         "pr_template_source": (
             templates[0]["path"] if templates else "assets/pr-description-template.md"
@@ -320,13 +345,43 @@ def _claim_comment() -> str:
     ).strip()
 
 
+def _likely_line(f: dict[str, Any]) -> str:
+    if f.get("source") == "history":
+        prs = ", ".join(f"#{n}" for n in f["prs"])
+        return f"- `{f['path']}` (changed by similar merged PR {prs})"
+    return f"- `{f['path']}` (matches: {', '.join(f['matched'])})"
+
+
+def format_similar(similar: dict[str, Any]) -> str:
+    """Markdown for the similar issues and the merged PRs that fixed them."""
+    if similar.get("error"):
+        return f"- Could not look up similar PRs: {similar['error']}"
+    if not similar.get("examples"):
+        return ("- No closed issue like this one with a merged fix was found. "
+                "Browse recently merged PRs on GitHub for the project's style.")
+    blocks = []
+    for ex in similar["examples"]:
+        issue, pr = ex["issue"], ex["pr"]
+        files = ", ".join(f"`{f['path']}`" for f in pr["files"][:5])
+        more = pr["changed_files"] - min(5, len(pr["files"]))
+        if more > 0:
+            files += f" and {more} more"
+        size = f"+{pr['additions']}/-{pr['deletions']} in {pr['changed_files']} file(s)"
+        note = " (large, so not a model for a first PR)" if pr["large"] else ""
+        blocks.append(
+            f"- **[#{issue['number']}]({issue['url']})** {issue['title']} ({ex['why']})\n"
+            f"  Fixed by [PR #{pr['number']}]({pr['url']}) by @{pr['author']}: {size}{note}, "
+            f"{pr['review_story']}.\n  Files: {files}"
+        )
+    return "\n".join(blocks)
+
+
 def render_markdown(data: dict[str, Any], approach: str | None = None) -> str:
     """Render the plan Markdown from collected data (approach can come from an LLM)."""
     issue, stack = data["issue"], data["stack"]
     repo_name = data["repo"].split("/")[1]
-    likely = "\n".join(
-        f"- `{f['path']}` (matches: {', '.join(f['matched'])})" for f in data["likely_files"]
-    ) or "- No obvious matches from the issue text — search the codebase for terms in the issue."
+    likely = "\n".join(_likely_line(f) for f in data["likely_files"]) or (
+        "- No obvious matches from the issue text — search the codebase for terms in the issue.")
     lint = stack["lint_commands"]
     lint_section = (
         "\nLint before committing:\n```bash\n" + _code_lines(lint, "") + "\n```\n" if lint else ""
@@ -348,6 +403,7 @@ def render_markdown(data: dict[str, Any], approach: str | None = None) -> str:
                                    "no install command detected — see README"),
         test_commands=_code_lines(stack["test_commands"], "no test command detected — see README"),
         lint_section=lint_section, rules=format_rules(data["rules"]), likely_files=likely,
+        similar_prs=format_similar(data.get("similar_prs") or {}),
         approach=approach or default_approach, commit_flags="-s " if data["dco"] else "",
         commit_message=data["commit_message"].replace('"', '\\"'),
         pr_description=data["pr_description"],

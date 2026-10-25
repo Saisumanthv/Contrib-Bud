@@ -309,11 +309,23 @@ def issues_cmd(
 
 # --- plan -----------------------------------------------------------------------
 
+def similar_facts(similar: dict[str, Any]) -> list[dict[str, Any]]:
+    """The similar merged PRs, trimmed for the plan prompt."""
+    return [{"issue": f"#{ex['issue']['number']} {ex['issue']['title']}",
+             "pr": f"#{ex['pr']['number']} {ex['pr']['title']}",
+             "size": f"+{ex['pr']['additions']}/-{ex['pr']['deletions']}, "
+                     f"{ex['pr']['changed_files']} files",
+             "files": [f["path"] for f in ex["pr"]["files"][:8]],
+             "review": ex["pr"]["review_story"]}
+            for ex in similar.get("examples", [])]
+
+
 def plan_facts(data: dict[str, Any]) -> dict[str, Any]:
     """Compact plan data for the refinement prompt."""
     return {
         "issue": {**data["issue"], "body": data["issue"]["body"][:3000]},
         "likely_files": data["likely_files"],
+        "similar_merged_prs": similar_facts(data.get("similar_prs") or {}),
         "test_commands": data["stack"]["test_commands"],
         "lint_commands": data["stack"]["lint_commands"],
         "rules": data["rules"],

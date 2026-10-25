@@ -1,8 +1,8 @@
-A beginner wants to fix issue #$number in $repo. FACTS contains the issue text, the likely files (found by keyword search, so they may be wrong), the repo's test commands and its rules.
+A beginner wants to fix issue #$number in $repo. FACTS contains the issue text, the likely files (those with source "history" were changed by merged PRs that fixed similar issues, which is strong evidence; "path match" ones come from keyword search and may be wrong), those similar merged PRs, the repo's test commands and its rules.
 
 Return ONLY a JSON object, no prose, no code fences, with this exact shape:
 {
-  "approach": "<Markdown numbered list, 3-6 steps, specific to this issue: how to reproduce/confirm it, where to look (only files listed in FACTS, cite them in [brackets]), what to change, which test to add, which commands to run>",
+  "approach": "<Markdown numbered list, 3-6 steps, specific to this issue: how to reproduce/confirm it, where to look (only files listed in FACTS, cite them in [brackets]), what to change, which test to add, which commands to run. If a similar merged PR fits, point to it as an example to imitate, e.g. [PR #123], including its size and anything its reviewers asked for>",
   "pr_summary": "<1-2 sentences for the PR's 'What' section, in the project's tone>",
   "claim_one_line": "<one short clause completing: 'My plan is to ...'>"
 }

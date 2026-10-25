@@ -43,6 +43,7 @@ flowchart LR
       F2[find_issues.py<br/>unclaimed beginner issues]
       F3[rank_issues.py<br/>clarity and difficulty heuristics]
       F4[plan_contribution.py<br/>branch, commit, likely files, PR text]
+      F7[similar_prs.py<br/>merged PRs that fixed similar issues]
       F5[precheck_pr.py<br/>pre-PR checklist]
     end
     S -->|GitHub REST API +<br/>raw.githubusercontent.com| GH[(GitHub)]
@@ -58,7 +59,7 @@ flowchart LR
 |---|---|---|
 | `buddy analyze <owner/repo>` | README, CONTRIBUTING, templates, stack, test/lint commands, rules, plus a **repo health** badge (Welcoming / Slow / Inactive) | Plain-English "how to contribute here", leading with health warnings |
 | `buddy issues <owner/repo>` | Beginner-labelled issues minus assigned / linked-PR / recently claimed; heuristic scores | Rank, explain each issue, recommend one |
-| `buddy plan <issue-url>` | Branch name, setup/test commands, likely files, commit style, PR template | Issue-specific approach, PR summary, claim comment |
+| `buddy plan <issue-url>` | Branch name, setup/test commands, **similar merged PRs** (files, size, review), likely files, commit style, PR template | Issue-specific approach, PR summary, claim comment |
 | `buddy check` | Diff size, commit style, DCO, issue link, PR template, runs lint/tests | Explain each failure and how to fix it |
 
 ### Repo health: is this repo worth my time?
@@ -76,6 +77,12 @@ flowchart LR
 The verdict is **Inactive** if the repo is archived, hasn't had a commit in 6 months, or is bad at both responding and merging. It is **Welcoming** if the last commit is recent, nothing is bad, and responses or merges are good. Otherwise it is **Slow**. If there are too few outside PRs to judge, it says so instead of guessing.
 
 "Outside contributors" means anyone who isn't an owner, member or collaborator, with bots excluded. GitHub relabels a first-timer as a regular contributor once their PR is merged, so counting only first-timers would hide every merged first PR.
+
+### Learn from similar merged PRs
+
+For the chosen issue, `plan` finds closed issues like it (keywords from the title, then shared labels) and the merged PRs that fixed them ([`similar_prs.py`](backend/contrib-buddy/scripts/similar_prs.py)). It shows which files each PR touched, how big it was (+/- lines, files changed), how long it took to merge, and how reviewers responded (number of reviews and requests for changes). Files those PRs changed come first in **Likely files**, ahead of keyword matches on file paths. Large PRs (30+ files) are flagged and left out of that list.
+
+The fixing PR is found from the issue's timeline: a merged PR that cross-referenced the issue, or else the PR that contains the commit that closed it.
 
 ## Agent skill vs. CLI
 
@@ -106,10 +113,10 @@ Variables can also go in a `.env` file (see [`.env.example`](.env.example)).
 
 ## Limitations
 
-- **Heuristics, not understanding.** "Likely files" uses keyword matching over file paths, not code search, and the clarity/difficulty scores are rough. The model refines them, but always read the code yourself.
+- **Heuristics, not understanding.** "Likely files" come from PRs that fixed similar issues when there are any, and otherwise from keyword matching over file paths, not code search. Similar issues are found by keyword search, so they can miss or mismatch. The clarity/difficulty scores are rough. The model refines them, but always read the code yourself.
 - **Claim detection** reads comments from the last 14 days in English only. Linked PRs are detected through GitHub search's `-linked:pr` qualifier.
 - **Rule extraction** is pattern-based (DCO, CLA, Conventional Commits, issue linking…). Unusual wording can be missed, so skim CONTRIBUTING anyway.
-- **Rate limits:** without `GITHUB_TOKEN`, one `analyze` + `issues` + `plan` run uses roughly 20–30 of your 60 requests/hour (the health check accounts for about 11; `fetch_repo_docs.py --no-health` skips it).
+- **Rate limits:** without `GITHUB_TOKEN`, one `analyze` + `issues` + `plan` run uses roughly 20–30 of your 60 requests/hour (the health check accounts for about 11; `fetch_repo_docs.py --no-health` skips it). `plan` adds about 20–40 calls (up to 8 of them searches) to find similar merged PRs, so set `GITHUB_TOKEN` if you plan more than one issue an hour.
 - **Health is a sample.** It reads the latest 100 PRs and 6 PR timelines, so a quiet month or a Hacktoberfest spam wave can skew it. Use it to decide where to look first, not as a final judgment.
 - Model output can still be wrong despite the citations. contrib-buddy drafts; you review.
 - **Hacktoberfest 2026** no longer counts PRs toward rewards ([hacktoberfest.com](https://hacktoberfest.com)). This tool is about real, useful contributions, not PR counts.

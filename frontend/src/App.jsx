@@ -3,6 +3,7 @@ import ReactMarkdown from 'react-markdown';
 import './App.css';
 import { API_URL, fetchTree, githubFileUrl } from './api';
 import HealthBadge from './HealthBadge';
+import SimilarPRs from './SimilarPRs';
 import ThemePicker from './ThemePicker';
 
 const REPO_LINK = /^(https?:\/\/)?(www\.)?github\.com\/[\w.-]+\/[\w.-]+\.git\/?$/i;
@@ -597,6 +598,8 @@ export default function App() {
                                 </div>
 
                                 <div className="plan-details">
+                                    <SimilarPRs similar={data.content.similar_prs} />
+
                                     <div className="detail-item">
                                         <span className="label">Suggested Branch Name</span>
                                         <code className="code-block">{data.content.branch}</code>

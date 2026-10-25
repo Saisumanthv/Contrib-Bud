@@ -42,7 +42,7 @@ python scripts/rank_issues.py issues.json
 ```
 python scripts/plan_contribution.py https://github.com/OWNER/REPO/issues/123
 ```
-This outputs a Markdown plan (fork/clone commands, branch name, setup and test commands, likely files, commit message and PR description drafts using the repo's PR template). Review it, improve the "Approach" wording for this specific issue, and present it. Offer the "claim this issue" comment from [assets/claim-comment-template.md](assets/claim-comment-template.md) for the user to post **themselves** if the project expects claiming. See [references/good-pr-etiquette.md](references/good-pr-etiquette.md).
+This outputs a Markdown plan (fork/clone commands, branch name, setup and test commands, similar merged PRs, likely files, commit message and PR description drafts using the repo's PR template). The "Learn from similar merged PRs" section lists closed issues like this one and the PRs that fixed them: files touched, size and how review went (from `similar_prs.py`, also runnable on its own). Likely files marked "changed by similar merged PR" are real history; the rest are keyword matches. Point the user to the closest example PR as a model for scope and style. Review it, improve the "Approach" wording for this specific issue, and present it. Offer the "claim this issue" comment from [assets/claim-comment-template.md](assets/claim-comment-template.md) for the user to post **themselves** if the project expects claiming. See [references/good-pr-etiquette.md](references/good-pr-etiquette.md).
 
 ### 4. Before opening the PR
 Run inside the user's local clone:
