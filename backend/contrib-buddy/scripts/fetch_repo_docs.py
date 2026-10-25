@@ -384,7 +384,9 @@ def fetch_repo_docs(repo_arg: str, max_chars: int = 12000, health: bool = True) 
     }
 
     stack_files: dict[str, str] = {}
-    wanted = [p for p in STACK_FILES if p in paths]
+    from doctor import VERSION_FILES, requirements  # doctor imports this module
+
+    wanted = [p for p in (*STACK_FILES, *VERSION_FILES) if p in paths]
     wanted += sorted(p for p in paths if re.fullmatch(r"\.github/workflows/[^/]+\.ya?ml", p))[:6]
     for p in wanted:
         text = raw_get(owner, repo, branch, p)
@@ -424,6 +426,8 @@ def fetch_repo_docs(repo_arg: str, max_chars: int = 12000, health: bool = True) 
         "tree_truncated": tree_truncated,
         "docs": docs,
         "stack": stack,
+        # Tool versions to have installed; `buddy doctor` checks them on the user's machine.
+        "requirements": requirements(stack_files, paths),
         "rules": rules,
         "health": health_info,
         "warnings": _warnings(meta, docs),

@@ -4,6 +4,7 @@ import { API_URL } from './api';
 import CitationReport from './CitationReport';
 import { citationComponents, markCitations } from './citationLinks';
 import CopyButton from './CopyButton';
+import { markdownProps } from './markdown';
 
 const PR_LINK = /^(https?:\/\/)?(www\.)?github\.com\/[\w.-]+\/[\w.-]+\/pull\/\d+\/?([?#].*)?$/i;
 const KIND_LABEL = { review: 'Review', ci: 'CI', merge: 'Merge', other: 'Other' };
@@ -13,7 +14,7 @@ function Cited({ text, citations, repo, branch }) {
     const msg = { citations, repo, branch };
     return (
         <div className="markdown-body">
-            <ReactMarkdown components={citationComponents(msg)}>{markCitations(text, citations)}</ReactMarkdown>
+            <ReactMarkdown {...markdownProps(citationComponents(msg))}>{markCitations(text, citations)}</ReactMarkdown>
         </div>
     );
 }

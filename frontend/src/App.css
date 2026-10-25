@@ -532,6 +532,166 @@ main > .back-button {
   font-weight: 500;
 }
 
+.glossary-term {
+  position: relative;
+  border-bottom: 1px dotted currentColor;
+  cursor: help;
+}
+
+.glossary-term:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 3px;
+}
+
+.glossary-tip {
+  display: none;
+  position: absolute;
+  z-index: 20;
+  left: 0;
+  bottom: calc(100% + 6px);
+  width: max-content;
+  max-width: min(300px, 80vw);
+  padding: 0.6rem 0.8rem;
+  border-radius: 10px;
+  background: var(--bg-dark);
+  border: 1px solid rgba(var(--accent-rgb), 0.4);
+  color: var(--text-body);
+  font-size: 0.85rem;
+  font-weight: 400;
+  line-height: 1.45;
+  white-space: normal;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
+}
+
+.glossary-tip strong {
+  display: block;
+  color: var(--accent-hover);
+  margin-bottom: 0.15rem;
+}
+
+.glossary-term:hover .glossary-tip,
+.glossary-term:focus .glossary-tip {
+  display: block;
+}
+
+.git-helper {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.git-recipe {
+  border: 1px solid var(--surface-border);
+  border-radius: 12px;
+  background: rgba(var(--overlay-rgb), 0.03);
+  padding: 0.75rem 1rem;
+}
+
+.git-recipe summary {
+  cursor: pointer;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.25rem 0.75rem;
+}
+
+.git-recipe-title {
+  font-weight: 600;
+}
+
+.git-steps {
+  margin: 0.75rem 0 0;
+  padding-left: 1.4rem;
+  display: grid;
+  gap: 0.75rem;
+}
+
+.git-steps p {
+  margin: 0.25rem 0 0;
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+  line-height: 1.5;
+}
+
+.git-step-cmd {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.git-step-cmd code,
+.git-step-cmd a {
+  overflow-wrap: anywhere;
+  background: var(--inset-bg);
+  border-radius: 6px;
+  padding: 0.25rem 0.55rem;
+  font-size: 0.85rem;
+}
+
+.git-step-cmd a {
+  color: var(--accent-hover);
+}
+
+.git-danger {
+  color: var(--status-warn) !important;
+}
+
+.setup-reqs {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.4rem;
+}
+
+.setup-reqs li {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 0.75rem;
+  align-items: baseline;
+}
+
+.tour {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.tour-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.tour-actions a {
+  text-decoration: none;
+}
+
+.tour-where-row {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.tour-where-row .coach-input {
+  flex: 1 1 240px;
+  margin-bottom: 0;
+}
+
+.tour-areas {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 0.75rem;
+}
+
+.tour-ask {
+  align-self: flex-start;
+  padding-left: 0;
+  font-size: 0.9rem;
+}
+
 .discover-link {
   margin: 0.75rem 0 0;
   text-align: center;

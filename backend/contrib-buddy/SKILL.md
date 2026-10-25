@@ -51,12 +51,22 @@ python scripts/plan_contribution.py https://github.com/OWNER/REPO/issues/123
 ```
 This outputs a Markdown plan (fork/clone commands, branch name, setup and test commands, similar merged PRs, likely files, commit message and PR description drafts using the repo's PR template). The "Learn from similar merged PRs" section lists closed issues like this one and the PRs that fixed them: files touched, size and how review went (from `similar_prs.py`, also runnable on its own). Likely files marked "changed by similar merged PR" are real history; the rest are keyword matches. Point the user to the closest example PR as a model for scope and style. The "Before you claim" section (from `claim_check.py`, also runnable on its own) says whether someone may already be on the issue: assigned, an open PR that mentions it or looks like the same work, or an "I'll take this" comment. It also lists questions for the maintainer when the issue is vague. If the verdict is "Someone may be on it" or "Ask first", tell the user that before anything else, and offer the generated comment (a check-in or questions) instead of a plain claim. Review it, improve the "Approach" wording for this specific issue, and present it. Offer the "claim this issue" comment from [assets/claim-comment-template.md](assets/claim-comment-template.md) for the user to post **themselves** if the project expects claiming. See [references/good-pr-etiquette.md](references/good-pr-etiquette.md).
 
+### 3b. Set up and work in the clone
+Run inside the user's local clone:
+```
+python /path/to/contrib-buddy/scripts/doctor.py --markdown          # tools and versions
+python /path/to/contrib-buddy/scripts/git_helper.py --diagnose      # git state
+python /path/to/contrib-buddy/scripts/git_helper.py --repo OWNER/REPO --branch fix/12-x
+```
+`doctor.py` compares installed Node/Python/Go/Rust/Ruby and tool versions with what the repo asks for (each requirement names its source file). Fix ❌ items before running setup commands. `git_helper.py --diagnose` lists `findings` (e.g. cloned the original instead of a fork, missing upstream, rebase in progress, commits on the default branch), each pointing at a `recipe`. Give the user that recipe's exact commands; warn about steps with a `danger` note. Never run git commands that change their repo for them.
+
 ### 4. Before opening the PR
 Run inside the user's local clone:
 ```
-python /path/to/contrib-buddy/scripts/precheck_pr.py --base main [--pr-body pr.md]
+python scripts/plan_contribution.py <issue-url> --json > plan.json
+python /path/to/contrib-buddy/scripts/precheck_pr.py --base main [--pr-body pr.md] [--plan plan.json]
 ```
-Walk the user through each `fail`/`warn` item and how to fix it. Use `--skip-commands` if running lint/tests is too slow or unsafe.
+Walk the user through each `fail`/`warn` item and how to fix it. With `--plan`, "Matches the plan" flags changed files outside the plan (often stray formatter runs or debug edits) and lockfile changes; ask whether each was intended. Use `--skip-commands` if running lint/tests is too slow or unsafe.
 
 ### 5. After opening the PR: review comments and failing checks
 ```

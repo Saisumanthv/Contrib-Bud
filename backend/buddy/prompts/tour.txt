@@ -1,0 +1,25 @@
+Give a first-time contributor a guided tour of the repository $repo: how it is organized and where things happen, so they can find their way around before changing anything.
+
+FACTS (JSON) has the repo's top-level folders ("areas": file counts, languages, the folder's own README summary, sample files with their docstrings), its entry points, where tests, docs and CI live, and the test commands.
+
+CODE (the first lines of each entry point, each headed [path:first-last]):
+$snippets
+
+Write Markdown with exactly these sections. Keep it short and concrete, and cite every claim: [folder/file.py] for a file, or [path:first-last] for lines in CODE.
+
+## The big picture
+2-3 sentences: what the project does and how the code is laid out at a high level.
+
+## How it's organized
+One bullet per important folder in FACTS.areas (skip trivial ones): what lives there, in plain words, citing a file in it.
+
+## Where things happen
+4-6 bullets of the form "To change <something a contributor might want>, start in [file]", based only on file names, docstrings and CODE. Say how a run starts from the entry point when CODE shows it.
+
+## Your first 30 minutes
+A numbered reading order of 4-5 files (README, the entry point, one core module, one test) with one line each on what to look for, and the command to run the tests.
+
+Never invent files or folders: use only paths that appear in FACTS or CODE.
+
+FACTS:
+$facts

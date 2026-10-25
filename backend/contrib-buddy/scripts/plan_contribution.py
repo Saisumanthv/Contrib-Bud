@@ -324,6 +324,7 @@ def plan_contribution(issue_url: str) -> dict[str, Any]:
         "issue": {"number": number, "title": title, "url": issue["html_url"], "labels": labels,
                   "state": issue.get("state"), "body": (issue.get("body") or "")[:4000]},
         "default_branch": branch_default,
+        "requirements": repo_info.get("requirements", []),
         "branch": branch,
         "commit_message": commit_message,
         "commit_style": style,

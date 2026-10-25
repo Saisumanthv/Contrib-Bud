@@ -47,6 +47,7 @@ flowchart LR
       F8[claim_check.py<br/>overlapping work, questions to ask]
       F9[pr_coach.py<br/>review threads, failing checks, CI logs]
       F10[discover_repos.py + match_skills.py<br/>repos and issues that fit your skills]
+      F11[doctor.py + git_helper.py<br/>local tool versions, git state and recipes]
       F5[precheck_pr.py<br/>pre-PR checklist]
     end
     S -->|GitHub REST API +<br/>raw.githubusercontent.com| GH[(GitHub)]
@@ -64,8 +65,32 @@ flowchart LR
 | `buddy analyze <owner/repo>` | README, CONTRIBUTING, templates, stack, test/lint commands, rules, plus a **repo health** badge (Welcoming / Slow / Inactive) | Plain-English "how to contribute here", leading with health warnings |
 | `buddy issues <owner/repo>` | Beginner-labelled issues minus assigned / linked-PR / recently claimed; heuristic scores | Rank, explain each issue, recommend one |
 | `buddy plan <issue-url>` | Branch name, setup/test commands, **similar merged PRs** (files, size, review), likely files, commit style, PR template | Issue-specific approach, PR summary, claim comment with issue-specific questions |
-| `buddy check` | Diff size, commit style, DCO, issue link, PR template, runs lint/tests | Explain each failure and how to fix it |
+| `buddy check [--issue <url> \| --plan plan.json]` | Diff size, commit style, DCO, issue link, PR template, **whether the changed files match the plan**, runs lint/tests | Explain each failure and how to fix it |
+| `buddy doctor` | Node/Python/Go/Rust/Ruby and tool versions the repo asks for, against what's installed | – |
+| `buddy git [--repo owner/repo]` | Your clone's remotes, fork, branch, rebase/merge state, unpushed work; recipes | – |
+| `buddy tour <owner/repo>` | Folders, entry points, tests/docs/CI locations from the code index | A guided tour with checked citations |
 | `buddy coach [<pr-url>] [--text log.txt]` | Review threads, reviewer verdicts, failing checks with annotations and logs, parsed errors, conflicts | Explain what reviewers and CI want, the fix for each, and a reply draft |
+
+### Doing the work: setup, git, staying on plan, finding your way
+
+- **`buddy doctor`** (run inside your clone, [`doctor.py`](backend/contrib-buddy/scripts/doctor.py)):
+  - **What it reads:** the versions the repo asks for (`engines`, `packageManager`, `.nvmrc`, `.tool-versions`, `requires-python`, `.python-version`, `go.mod`, `rust-toolchain`, `Cargo.toml`, `.ruby-version`, `Gemfile`) and the tools its setup commands use.
+  - **What it checks:** it runs each tool's `--version` and compares it with npm-style (`^18.17`, `>=18 <21`, `18.x || >=20`) and Python-style (`>=3.10,<4`, `~=3.11`) constraints. You get ✅ / ⚠️ / ❌ and how to install or switch versions, before setup fails with a confusing error. It changes nothing.
+  - **In the web app,** plan pages list what the repo needs and give the command to run.
+- **Git helper** (🧰 tab, the plan page, `buddy git`, [`git_helper.py`](backend/contrib-buddy/scripts/git_helper.py)):
+  - **Recipes:** exact commands for forking and cloning, adding `upstream`, starting a branch, syncing your fork, rebasing your PR, resolving conflicts, fixing or signing off commits, squashing and undoing mistakes. They're filled in with the repo, its default branch and your branch, each step says what it does, and steps that can lose work are marked.
+  - **Diagnosis:** in your clone, `buddy git` reads your git state and says what to fix first. It covers cloning the original instead of your fork, a missing upstream, a rebase in progress, commits made on `main`, unpushed work and being behind.
+- **Plan-vs-diff check:** `buddy check --issue <url>` (or `--plan plan.json` from `buddy plan --json`) sorts every changed file into one of three groups:
+  - **planned:** a likely file from the plan, or one that similar merged PRs changed;
+  - **related:** next to a planned file, a test for one, or a changelog entry;
+  - **unrelated:** anything else.
+
+  It warns about unrelated files (often a stray formatter run or a debug edit) and accidental lockfile changes.
+- **Codebase tour** (🧭 tab, `buddy tour`, [`tour.py`](backend/buddy/tour.py)):
+  - **What it covers:** how the repo is organized, where it starts, where to change common things, and a reading order for your first 30 minutes.
+  - **How it's built:** from the chat's code index (folders with their README summaries and key files, entry points with their first lines). Every citation is checked, and folder links go to the file tree and flow chart.
+  - **Asking questions:** "Ask about this folder" and **"Where does … happen?"** send the question to the chat.
+- **Beginner glossary:** in AI-written text, the first mention of terms like DCO, rebase, CI, nit, LGTM, force-with-lease, changeset or flaky test is underlined. Hover over it, focus it or tap it for a plain-English definition.
 
 ### Discovery and matching: where should I contribute?
 

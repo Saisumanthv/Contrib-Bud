@@ -30,5 +30,7 @@ prechecker = _load("precheck_pr")
 coach = _load("pr_coach")
 matcher = _load("match_skills")
 discovery = _load("discover_repos")
+doctor = _load("doctor")
+git_helper = _load("git_helper")
 
 GitHubError = github.GitHubError

@@ -7,6 +7,7 @@ page (static/index.html) and three JSON endpoints mirroring analyze/issues/plan.
 from __future__ import annotations
 
 import json
+import re
 import sys
 import threading
 import traceback
@@ -16,7 +17,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
 
-from buddy import citations, coach, llm, rag
+from buddy import citations, coach, llm, rag, tour
 from buddy.cli import (
     analyze_facts,
     annotate_issues,
@@ -26,7 +27,17 @@ from buddy.cli import (
     plan_facts,
 )
 from buddy.providers import Provider, ProviderError, get_provider
-from buddy.skill import GitHubError, discovery, github, issues, matcher, planner, ranker, repo_docs
+from buddy.skill import (
+    GitHubError,
+    discovery,
+    git_helper,
+    github,
+    issues,
+    matcher,
+    planner,
+    ranker,
+    repo_docs,
+)
 
 CHAT_HISTORY_TURNS = 10  # messages of earlier conversation sent with each question
 
@@ -118,6 +129,27 @@ def _skills(value: Any) -> list[str]:
     if isinstance(value, list):
         return matcher.normalize_skills([v for v in value[:30] if isinstance(v, str)])
     return []
+
+
+def api_tour(body: dict[str, Any]) -> dict[str, Any]:
+    """A guided tour of how a repo is organized and where things happen."""
+    provider, ai_error = maybe_provider(bool(body.get("ai", True)))
+    result = tour.run(_text(body, "repo"), provider)
+    result["ai_error"] = result["ai_error"] or ai_error
+    return result
+
+
+def api_git(body: dict[str, Any]) -> dict[str, Any]:
+    """Git recipes (fork, sync, rebase, conflicts, undo...) filled in for a repo and branch."""
+    owner, name = github.parse_repo(_text(body, "repo"))
+    default = body.get("default_branch")
+    if not isinstance(default, str) or not re.fullmatch(r"[\w./-]{1,100}", default):
+        default = github.api_get(f"/repos/{owner}/{name}")["default_branch"]
+    branch = body.get("branch") if isinstance(body.get("branch"), str) else None
+    if branch and not re.fullmatch(r"[\w./-]{1,100}", branch):
+        raise ApiError("That branch name has characters git doesn't allow.")
+    return {"repo": f"{owner}/{name}", "default_branch": default,
+            "recipes": git_helper.recipes(f"{owner}/{name}", default, branch)}
 
 
 def api_discover(body: dict[str, Any]) -> dict[str, Any]:
@@ -271,7 +303,8 @@ def api_tree(body: dict[str, Any]) -> dict[str, Any]:
 
 ROUTES = {"/api/analyze": api_analyze, "/api/issues": api_issues, "/api/plan": api_plan,
           "/api/chat": api_chat, "/api/tree": api_tree, "/api/index": api_index,
-          "/api/coach": api_coach, "/api/discover": api_discover}
+          "/api/coach": api_coach, "/api/discover": api_discover, "/api/tour": api_tour,
+          "/api/git": api_git}
 
 
 # --- HTTP plumbing ----------------------------------------------------------------

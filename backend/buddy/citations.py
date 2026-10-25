@@ -57,6 +57,10 @@ class Known:
     issue_numbers: set[int] | None = None  # None: no issue data (repo chat)
     comment_authors: set[str] = field(default_factory=set)
     derived: dict[str, list[str]] = field(default_factory=dict)  # path -> facts from it
+    # Guides (the codebase tour) cite whole files to say "go and read this", not "this
+    # file says so": then a whole-file citation only has to exist.
+    navigational: bool = False
+    skip: set[str] = field(default_factory=set)  # bracketed text that isn't a source
 
     @classmethod
     def from_stack(cls, stack: dict[str, Any], **kwargs: Any) -> Known:
@@ -209,6 +213,10 @@ def check_file(ref: dict[str, Any], claim: str, blocks: list[str],
         return {**ref, "status": "unchecked", "reason": "code search is unavailable"}
     path = index.resolve(ref["path"])
     if path is None:
+        folder = ref["path"].strip("/") + "/"
+        if ref["start"] is None and any(p.startswith(folder) for p in index.lines):
+            return {**ref, "kind": "folder", "path": folder.rstrip("/"), "status": "verified",
+                    "reason": ""}  # a folder, e.g. [src/cli/]: it exists
         return {**ref, "status": "not_found", "reason": f"no file {ref['path']} in the repo"}
     lines = index.lines[path]
     derived = [fact for source, facts in (known.derived if known else {}).items()
@@ -216,6 +224,8 @@ def check_file(ref: dict[str, Any], claim: str, blocks: list[str],
     ref = {**ref, "path": path}
     ignore = _words(path.replace("/", " ").replace(".", " "))
     start, end = ref["start"], ref["end"]
+    if start is None and known and known.navigational:
+        return {**ref, "status": "verified", "reason": ""}
     if start is None:
         ok, why = support(claim, blocks, lines + derived, ignore)
         return {**ref, "status": "verified" if ok else "unsupported",
@@ -267,7 +277,9 @@ def verify(reply: str, index: RepoIndex | None, known: Known | None = None) -> l
     for m in CITATION_RE.finditer(reply):
         if _inside(m.start(), code):
             continue
-        refs = [r for part in re.split(r"[,;]\s*", m.group(1)) if (r := parse_ref(part))]
+        skip = {s.lower() for s in known.skip} if known else set()
+        refs = [r for part in re.split(r"[,;]\s*", m.group(1))
+                if part.strip().lower() not in skip and (r := parse_ref(part))]
         if not refs:
             continue  # "[x]" checkboxes, "[optional]" and the like
         claim, blocks = claim_for(reply, m.start())

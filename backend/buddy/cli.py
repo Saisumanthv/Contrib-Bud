@@ -24,6 +24,7 @@ from buddy.providers import Provider, ProviderError, get_provider
 from buddy.skill import (
     GitHubError,
     discovery,
+    git_helper,
     github,
     issues,
     matcher,
@@ -32,6 +33,7 @@ from buddy.skill import (
     ranker,
     repo_docs,
 )
+from buddy.skill import doctor as doctor_mod  # the `doctor` command's name is taken
 
 app = typer.Typer(
     add_completion=False,
@@ -438,17 +440,30 @@ def check(
     skip_commands: bool = typer.Option(False, "--skip-commands",
                                        help="Don't run lint/test commands."),
     timeout: int = typer.Option(600, "--timeout", help="Per-command timeout (seconds)."),
+    plan_file: Path | None = typer.Option(None, "--plan",
+                                          help="Plan JSON (buddy plan --json) to compare with."),
+    issue: str | None = typer.Option(None, "--issue",
+                                     help="Issue URL: build its plan and compare your diff."),
     no_ai: bool = typer.Option(False, "--no-ai", help=NO_AI_HELP),
     as_json: bool = typer.Option(False, "--json", help="Print machine-readable JSON."),
 ) -> None:
     """Run the pre-PR checklist in the current git repo."""
     provider = provider_or_exit(no_ai)
+    plan_data = None
     try:
+        if plan_file:
+            plan_data = json.loads(plan_file.read_text(encoding="utf-8"))
+        elif issue:
+            with console.status("Building the plan to compare your changes with…"):
+                plan_data = planner.plan_contribution(issue)
         with console.status("Running pre-PR checks…"):
             result = prechecker.precheck(base, str(pr_body) if pr_body else None,
-                                         not skip_commands, timeout)
+                                         not skip_commands, timeout, plan_data)
     except GitHubError as exc:
         fail(str(exc))
+    except (OSError, ValueError) as exc:
+        fail(f"Cannot read the plan: {exc}",
+             "Create it with: buddy plan <issue-url> --json > plan.json")
     advice = None
     problems = [c for c in result["checks"] if c["status"] in ("warn", "fail")]
     if provider and problems:
@@ -480,6 +495,101 @@ def check(
     else:
         next_step("Fix the ✘ items above, commit, and run [bold]buddy check[/] again.")
     raise typer.Exit(0 if result["ready"] else 1)
+
+
+@app.command()
+def doctor(
+    path: Path = typer.Option(Path("."), "--path", help="Your local clone (default: here)."),
+    as_json: bool = typer.Option(False, "--json", help="Print machine-readable JSON."),
+) -> None:
+    """Check your installed tools and versions against what this repo needs."""
+    with console.status("Reading the repo's requirements and checking your tools…"):
+        result = doctor_mod.doctor(str(path))
+    if as_json:
+        dump(result)
+        raise typer.Exit(0 if result["ready"] else 1)
+    style = {"pass": "green", "warn": "yellow", "fail": "red", "missing": "red", "unknown": "dim"}
+    table = Table(title=f"Setup doctor: {result['path']}", title_justify="left",
+                  header_style="bold")
+    for col in ("", "Tool", "Needs", "You have", "From"):
+        table.add_column(col)
+    for c in result["checks"]:
+        table.add_row(f"[{style[c['status']]}]{doctor_mod.ICON[c['status']]}[/]", c["tool"],
+                      esc(c["required"] or "any"), esc(c["installed"] or "not found"),
+                      esc(c["source"]))
+    console.print(table)
+    for c in result["checks"]:
+        if c["fix"]:
+            console.print(f"[{style[c['status']]}]{c['tool']}:[/] {esc(c['fix'])}")
+    if not result["checks"]:
+        console.print("[dim]No version requirements found here. Run it inside your clone.[/]")
+    next_step("Install or update the ✘ items, then run the setup commands from the plan."
+              if not result["ready"] else "You're set up. Install the project's dependencies "
+              "and run its tests once before changing anything.")
+    raise typer.Exit(0 if result["ready"] else 1)
+
+
+@app.command(name="git")
+def git_cmd(
+    repo: str | None = typer.Option(None, "--repo", help="owner/repo, to print all recipes."),
+    branch: str | None = typer.Option(None, "--branch", help="Your branch name."),
+    default: str = typer.Option("main", "--default", help="The project's default branch."),
+    path: Path = typer.Option(Path("."), "--path", help="Your local clone (default: here)."),
+    as_json: bool = typer.Option(False, "--json", help="Print machine-readable JSON."),
+) -> None:
+    """Check your clone's git state and show the exact commands to fix or sync it."""
+    if repo:
+        result: dict[str, Any] = {"recipes": git_helper.recipes(repo, default, branch),
+                                  "findings": []}
+    else:
+        with console.status("Reading your clone's git state…"):
+            result = git_helper.diagnose(str(path))
+    if as_json:
+        dump(result)
+        return
+    level_style = {"error": "red", "warn": "yellow", "info": "cyan", "ok": "green"}
+    for f in result["findings"]:
+        body = esc(f["message"]) + "".join(f"\n  $ {esc(c)}" for c in f["commands"])
+        console.print(Panel(body, border_style=level_style[f["level"]], title=f["level"],
+                            title_align="left"))
+    wanted = {f["recipe"] for f in result["findings"] if f["recipe"]}
+    for recipe in result.get("recipes") or []:
+        if repo or recipe["id"] in wanted:
+            lines = [f"[dim]{esc(recipe['when'])}[/]"]
+            for s in recipe["steps"]:
+                warn = f"\n    [red]⚠ {esc(s['danger'])}[/]" if s["danger"] else ""
+                lines.append(f"[green]{esc(s['cmd'])}[/]\n    {esc(s['why'])}{warn}")
+            console.print(Panel("\n".join(lines), title=recipe["title"], title_align="left"))
+    if not repo:
+        next_step("All recipes for this project:  [bold]buddy git --repo OWNER/REPO[/]")
+
+
+@app.command()
+def tour(
+    repo: str = typer.Argument(..., help="owner/repo or GitHub URL"),
+    no_ai: bool = typer.Option(False, "--no-ai", help=NO_AI_HELP),
+    as_json: bool = typer.Option(False, "--json", help="Print machine-readable JSON."),
+) -> None:
+    """A guided tour of how the repo is organized and where things happen."""
+    from buddy import tour as tour_mod
+
+    provider = provider_or_exit(no_ai)
+    try:
+        with console.status("Indexing the code and writing the tour…"):
+            result = tour_mod.run(repo, provider)
+    except GitHubError as exc:
+        fail(str(exc))
+    if as_json:
+        dump(result)
+        return
+    if result["ai_error"]:
+        console.print(f"[yellow]{esc(result['ai_error'])}[/]")
+    console.print(Markdown(result["markdown"]))
+    flagged = [c["raw"] for c in result["citations"] if c["status"] in ("unsupported",
+                                                                         "not_found")]
+    if flagged:
+        console.print(f"[yellow]⚠ Couldn't verify: {esc(', '.join(flagged))}[/]")
+    next_step(f"Ask where something happens:  [bold]buddy web[/] → chat about {result['repo']}")
 
 
 @app.command()

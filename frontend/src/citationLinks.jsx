@@ -25,6 +25,7 @@ export function markCitations(content, citations) {
 }
 
 export function refUrl(ref, repo, branch) {
+    if (ref.kind === 'folder') return `https://github.com/${repo}/tree/${branch}/${ref.path}`;
     if (ref.kind === 'file') {
         const lines = ref.start ? `#L${ref.start}${ref.end && ref.end !== ref.start ? `-L${ref.end}` : ''}` : '';
         return `https://github.com/${repo}/blob/${branch}/${ref.path}${lines}`;

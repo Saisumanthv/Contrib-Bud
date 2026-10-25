@@ -150,3 +150,15 @@ def test_tree_returns_sorted_paths(monkeypatch):
     assert seen["args"] == ("o", "r", "main")
     assert data["paths"] == ["README.md", "src/a.py", "src/b.py"]
     assert data["truncated"] is False
+
+
+def test_git_recipes_endpoint(monkeypatch):
+    monkeypatch.setattr(web.github, "api_get", lambda path, **kw: pytest.fail("no call needed"))
+    data = web.api_git({"repo": "https://github.com/o/proj.git", "default_branch": "develop",
+                        "branch": "fix/1-x"})
+    assert data["repo"] == "o/proj" and data["recipes"][1]["steps"][1]["cmd"] == \
+        "git switch -c fix/1-x upstream/develop"
+    with pytest.raises(web.ApiError):
+        web.api_git({"repo": "o/proj", "default_branch": "main", "branch": "bad; rm -rf /"})
+    monkeypatch.setattr(web.github, "api_get", lambda path, **kw: {"default_branch": "trunk"})
+    assert web.api_git({"repo": "o/proj"})["default_branch"] == "trunk"

@@ -7,6 +7,10 @@ import ClaimCheck from './ClaimCheck';
 import Discover from './Discover';
 import PRCoach from './PRCoach';
 import { CONTRIBUTION_ICONS, FIT_LABELS, loadSkills, saveSkills, skillFit } from './skills';
+import GitHelper from './GitHelper';
+import { markdownProps } from './markdown';
+import SetupCheck from './SetupCheck';
+import Tour from './Tour';
 import { citationComponents, markCitations } from './citationLinks';
 import HealthBadge from './HealthBadge';
 import SimilarPRs from './SimilarPRs';
@@ -126,9 +130,13 @@ export default function App() {
             });
     };
 
-    const handleChatSubmit = async (e) => {
+    const handleChatSubmit = (e) => {
         e.preventDefault();
-        const question = chatInput.trim();
+        sendChat(chatInput.trim());
+    };
+
+    // Also used by the tour's "Ask in chat" buttons.
+    const sendChat = async (question) => {
         if (!question || chatPending || !chat || loading) return;
 
         const { key } = chat;
@@ -482,7 +490,7 @@ export default function App() {
                                     <h3>AI Contribution Summary</h3>
                                     {data.content.ai_summary ? (
                                         <div className="markdown-body">
-                                            <ReactMarkdown>{data.content.ai_summary}</ReactMarkdown>
+                                            <ReactMarkdown {...markdownProps()}>{data.content.ai_summary}</ReactMarkdown>
                                         </div>
                                     ) : (
                                         <div className="summary-missing">
@@ -530,7 +538,42 @@ export default function App() {
                                     >
                                         🩺 PR coach
                                     </button>
+                                    <button
+                                        type="button"
+                                        role="tab"
+                                        aria-selected={activeTab === 'tour'}
+                                        className={`tab ${activeTab === 'tour' ? 'active' : ''}`}
+                                        onClick={() => setActiveTab('tour')}
+                                    >
+                                        🧭 Tour
+                                    </button>
+                                    <button
+                                        type="button"
+                                        role="tab"
+                                        aria-selected={activeTab === 'git'}
+                                        className={`tab ${activeTab === 'git' ? 'active' : ''}`}
+                                        onClick={() => setActiveTab('git')}
+                                    >
+                                        🧰 Git help
+                                    </button>
                                 </div>
+
+                                {activeTab === 'tour' && (
+                                    <div className="tree-section">
+                                        <Tour
+                                            repo={data.content.facts.repo}
+                                            onAsk={sendChat}
+                                            onShowTree={handleTreeTab}
+                                            flowchartUrl={`?${new URLSearchParams({ flowchart: data.content.facts.repo, branch: data.content.facts.default_branch })}`}
+                                        />
+                                    </div>
+                                )}
+
+                                {activeTab === 'git' && (
+                                    <div className="tree-section">
+                                        <GitHelper repo={data.content.facts.repo} defaultBranch={data.content.facts.default_branch} />
+                                    </div>
+                                )}
 
                                 {activeTab === 'coach' && (
                                     <div className="tree-section">
@@ -732,14 +775,21 @@ export default function App() {
                                         <code className="code-block">{data.content.commit_message}</code>
                                     </div>
 
+                                    <SetupCheck requirements={data.content.requirements} />
+
                                     {data.content.markdown && (
                                         <div className="detail-item">
                                             <span className="label">Full Analysis & Contribution Plan</span>
                                             <div className="markdown-body pr-template">
-                                                <ReactMarkdown>{data.content.markdown}</ReactMarkdown>
+                                                <ReactMarkdown {...markdownProps()}>{data.content.markdown}</ReactMarkdown>
                                             </div>
                                         </div>
                                     )}
+
+                                    <details className="detail-item coach-later">
+                                        <summary className="label">🧰 Git commands for this change (fork, sync, rebase, fix mistakes)</summary>
+                                        <GitHelper repo={data.content.repo} defaultBranch={data.content.default_branch} branch={data.content.branch} />
+                                    </details>
 
                                     <ClaimCheck check={data.content.claim_check} comment={data.content.claim_comment} />
 
@@ -805,7 +855,7 @@ export default function App() {
                             {messages.map((msg, idx) => (
                                 <div key={idx} className={`chat-message ${msg.role.toLowerCase()}`}>
                                     <strong>{msg.role}: </strong>
-                                    <ReactMarkdown components={citationComponents(msg)}>
+                                    <ReactMarkdown {...markdownProps(citationComponents(msg))}>
                                         {markCitations(msg.content, msg.citations)}
                                     </ReactMarkdown>
                                     <CitationReport msg={msg} />

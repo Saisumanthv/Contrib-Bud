@@ -11,6 +11,8 @@ from buddy.web import (
     api_chat,
     api_coach,
     api_discover,
+    api_git,
+    api_tour,
     api_index,
     api_tree,
     provider_status,
@@ -66,6 +68,14 @@ def plan(body: dict):
 @app.post("/api/chat")
 def chat(body: dict):
     return api_chat(body)
+
+@app.post("/api/tour")
+def tour_endpoint(body: dict):
+    return api_tour(body)
+
+@app.post("/api/git")
+def git_endpoint(body: dict):
+    return api_git(body)
 
 @app.post("/api/discover")
 def discover_endpoint(body: dict):

@@ -43,3 +43,32 @@ def test_diff_size_and_shortstat():
     assert pp.check_diff_size(2, 30, 5)["status"] == "pass"
     assert pp.check_diff_size(10, 500, 100)["status"] == "warn"
     assert pp.check_diff_size(50, 2000, 100)["status"] == "fail"
+
+
+PLAN = {"issue": {"number": 12},
+        "likely_files": [{"path": "src/click/core.py"}, {"path": "src/click/types.py"}],
+        "similar_prs": {"history_files": [{"path": "docs/options.md", "prs": [1]}]}}
+
+
+def test_classify_change_against_the_plan():
+    planned = pp.plan_files(PLAN)
+    assert planned == {"src/click/core.py", "src/click/types.py", "docs/options.md"}
+    assert pp.classify_change("src/click/core.py", planned) == "planned"
+    assert pp.classify_change("src/click/parser.py", planned) == "related"  # same folder
+    assert pp.classify_change("tests/test_core.py", planned) == "related"  # tests a planned file
+    assert pp.classify_change("CHANGES.rst", planned) == "related"
+    assert pp.classify_change(".changeset/brave-rooms.md", planned) == "related"
+    assert pp.classify_change("examples/repo/README.md", planned) == "unrelated"
+    assert pp.classify_change("tests/test_shell.py", planned) == "unrelated"
+
+
+def test_plan_drift_check():
+    ok = pp.check_plan_drift(["src/click/core.py", "tests/test_core.py"], PLAN)
+    assert ok["status"] == "pass" and "next to planned ones (1)" in ok["detail"]
+    drift = pp.check_plan_drift(["src/click/core.py", "examples/x.py", "package-lock.json"], PLAN)
+    assert drift["status"] == "warn"
+    assert "1 file(s) outside the plan for #12: examples/x.py" in drift["detail"]
+    assert "lockfile changed (package-lock.json)" in drift["detail"]
+    assert {f["path"]: f["kind"] for f in drift["files"]}["examples/x.py"] == "unrelated"
+    assert pp.check_plan_drift(["a.py"], None)["status"] == "skip"
+    assert pp.check_plan_drift(["a.py"], {"likely_files": []})["status"] == "skip"
