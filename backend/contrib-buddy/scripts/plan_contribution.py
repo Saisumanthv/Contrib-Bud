@@ -22,6 +22,7 @@ from string import Template
 from typing import Any
 
 from _github import GitHubError, api_get, emit_json, emit_text, parse_issue_url, run_cli
+from claim_check import claim_check
 from fetch_repo_docs import fetch_repo_docs, fetch_tree
 from similar_prs import find_similar_prs, issue_keywords
 
@@ -306,13 +307,17 @@ def plan_contribution(issue_url: str) -> dict[str, Any]:
     pr_template = templates[0]["content"] if templates else None
     pr_description = fill_pr_template(pr_template, number, title, test_cmd)
     body = issue.get("body") or ""
+    keywords = issue_keywords(title, body, extract_keywords)
     try:
-        similar = find_similar_prs(owner, repo, number,
-                                   issue_keywords(title, body, extract_keywords), labels, paths)
+        similar = find_similar_prs(owner, repo, number, keywords, labels, paths)
     except GitHubError as exc:  # e.g. search rate limit: the rest of the plan still works
         similar = {"examples": [], "history_files": [], "error": str(exc)}
     likely = merge_likely_files(similar["history_files"],
                                 find_likely_files(f"{title}\n{body}", paths))
+    try:
+        check = claim_check(owner, repo, issue, keywords, [f["path"] for f in likely])
+    except GitHubError as exc:  # the plan is still useful; say the check didn't run
+        check = {"verdict": None, "error": str(exc), "questions": []}
 
     data = {
         "repo": repo_info["repo"],
@@ -331,18 +336,59 @@ def plan_contribution(issue_url: str) -> dict[str, Any]:
         "pr_template_source": (
             templates[0]["path"] if templates else "assets/pr-description-template.md"
         ),
-        "claim_comment": _claim_comment(),
+        "claim_check": check,
+        "claim_comment": _claim_comment(check),
         "warnings": warnings + repo_info["warnings"],
     }
     data["markdown"] = render_markdown(data)
     return data
 
 
-def _claim_comment() -> str:
+PLAN_PLACEHOLDER = "<one line: what you will change>"
+
+
+def _claim_comment(check: dict[str, Any] | None = None) -> str:
+    """The comment to post on the issue, shaped by the pre-claim check: a check-in when
+    someone may already be on it, otherwise the claim plus questions for the maintainer."""
+    check = check or {}
+    if check.get("verdict") == "closed":
+        return ("Hi! I see this issue is closed. Is any part of it still open for a PR? If so, "
+                f"I'd be happy to help: my plan would be to {PLAN_PLACEHOLDER}.")
+    if check.get("verdict") == "taken":
+        return (f"Hi! I'm interested in this issue. I noticed {_existing_work(check)}. Is that "
+                f"still in progress? If not, I'd be happy to take it on: my plan would be to "
+                f"{PLAN_PLACEHOLDER}. Happy to help with the existing work too.")
     text = (ASSETS / "claim-comment-template.md").read_text(encoding="utf-8")
-    return Template(text).safe_substitute(
-        plan_one_line="<one line: what you will change>", timeframe="<e.g. a week>"
-    ).strip()
+    comment = Template(text).safe_substitute(
+        plan_one_line=PLAN_PLACEHOLDER, timeframe="<e.g. a week>").strip()
+    questions = check.get("questions") or []
+    if questions:
+        first, _, rest = comment.partition("\n\n")
+        listed = "\n".join(f"{i}. {q}" for i, q in enumerate(questions, 1))
+        ask = "a question" if len(questions) == 1 else "a few questions"
+        comment = f"{first}\n\nBefore I start, could you help with {ask}?\n\n{listed}\n\n{rest}"
+    return comment
+
+
+def _existing_work(check: dict[str, Any]) -> str:
+    """'#45 by @dev' or '@dev offered to work on it', for the check-in comment."""
+    strong = [p for p in check.get("overlapping_prs", []) if p["strength"] == "high"]
+    if strong:
+        return f"#{strong[0]['number']} by @{strong[0]['author']}"
+    recent = [c for c in check.get("claims", []) if (c.get("days_ago") or 0) <= 14]
+    if recent:
+        return f"@{recent[0]['by']} offered to work on it"
+    return "it's already assigned"
+
+
+def format_claim_check(check: dict[str, Any]) -> str:
+    """Markdown for the pre-claim check: verdict, advice and what was found."""
+    if not check.get("verdict"):
+        return f"> Could not check for overlapping work: {check.get('error', 'unknown error')}\n"
+    icon = {"closed": "🔒", "taken": "🛑", "ask_first": "✋", "clear": "✅"}[check["verdict"]]
+    lines = [f"**{icon} {check['label']}.** {check['advice']}", ""]
+    lines += [f"- {finding}" for finding in check["findings"]]
+    return "\n".join(lines) + "\n"
 
 
 def _likely_line(f: dict[str, Any]) -> str:
@@ -408,9 +454,11 @@ def render_markdown(data: dict[str, Any], approach: str | None = None) -> str:
         commit_message=data["commit_message"].replace('"', '\\"'),
         pr_description=data["pr_description"],
     )
+    check = data.get("claim_check")
+    md += "\n## Before you claim\n" + (format_claim_check(check) + "\n" if check else "")
     md += (
-        "\n## Optional: claim the issue\nOnly if the project expects it (see rules above), "
-        "post this yourself:\n\n> " + data["claim_comment"].replace("\n", "\n> ") + "\n"
+        "Post this yourself, only if the project expects claiming (see rules above) or you "
+        "need answers first:\n\n> " + data["claim_comment"].replace("\n", "\n> ") + "\n"
     )
     if data["warnings"]:
         md = "> **Warnings:** " + " ".join(data["warnings"]) + "\n\n" + md

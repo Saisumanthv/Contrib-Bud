@@ -44,6 +44,7 @@ flowchart LR
       F3[rank_issues.py<br/>clarity and difficulty heuristics]
       F4[plan_contribution.py<br/>branch, commit, likely files, PR text]
       F7[similar_prs.py<br/>merged PRs that fixed similar issues]
+      F8[claim_check.py<br/>overlapping work, questions to ask]
       F5[precheck_pr.py<br/>pre-PR checklist]
     end
     S -->|GitHub REST API +<br/>raw.githubusercontent.com| GH[(GitHub)]
@@ -52,14 +53,14 @@ flowchart LR
 ```
 
 1. **Scripts gather facts.** Every repo fact (commands, rules, issues, files) comes from GitHub data, and each one carries its source file.
-2. **The model does the language work.** It explains guidelines in plain English, ranks and explains issues, and drafts the approach and PR text. Prompts ([`buddy/prompts/`](buddy/prompts/)) require it to cite `[CONTRIBUTING.md]`, `[#123]` and the like, and to say "not found" instead of guessing.
+2. **The model does the language work.** It explains guidelines in plain English, ranks and explains issues, and drafts the approach and PR text. Prompts ([`buddy/prompts/`](buddy/prompts/)) require it to cite `[CONTRIBUTING.md]`, `[#123]` and the like, and to say "not found" instead of guessing. In the web chat, every citation is then **checked automatically** (see below).
 3. **Structured output is checked.** Ranking and plan responses are JSON, validated against the real issue numbers and retried once. If they're still invalid, the CLI falls back to the heuristic ranking.
 
 | Command | Facts (scripts) | Model's job |
 |---|---|---|
 | `buddy analyze <owner/repo>` | README, CONTRIBUTING, templates, stack, test/lint commands, rules, plus a **repo health** badge (Welcoming / Slow / Inactive) | Plain-English "how to contribute here", leading with health warnings |
 | `buddy issues <owner/repo>` | Beginner-labelled issues minus assigned / linked-PR / recently claimed; heuristic scores | Rank, explain each issue, recommend one |
-| `buddy plan <issue-url>` | Branch name, setup/test commands, **similar merged PRs** (files, size, review), likely files, commit style, PR template | Issue-specific approach, PR summary, claim comment |
+| `buddy plan <issue-url>` | Branch name, setup/test commands, **similar merged PRs** (files, size, review), likely files, commit style, PR template | Issue-specific approach, PR summary, claim comment with issue-specific questions |
 | `buddy check` | Diff size, commit style, DCO, issue link, PR template, runs lint/tests | Explain each failure and how to fix it |
 
 ### Repo health: is this repo worth my time?
@@ -77,6 +78,29 @@ flowchart LR
 The verdict is **Inactive** if the repo is archived, hasn't had a commit in 6 months, or is bad at both responding and merging. It is **Welcoming** if the last commit is recent, nothing is bad, and responses or merges are good. Otherwise it is **Slow**. If there are too few outside PRs to judge, it says so instead of guessing.
 
 "Outside contributors" means anyone who isn't an owner, member or collaborator, with bots excluded. GitHub relabels a first-timer as a regular contributor once their PR is merged, so counting only first-timers would hide every merged first PR.
+
+### Verified citations in chat
+
+Chat answers cite their sources, like `[src/app.py:12-40]`, `[README.md]`, `[#123]` or `[comment by @name]`. [`buddy/citations.py`](backend/buddy/citations.py) checks each one against the repo the chat indexed:
+
+- **The file and lines exist.** Paths can be shortened when only one file matches (`app.py` means `src/app.py`).
+- **The claim matches what's there.** The sentence (or clause) citing the lines must share enough words with them, allowing a few lines of slack. Any `` `quoted code` `` or code block must appear in them verbatim.
+- **Issues and comments were in the data the model had.** In issue chat, `[#n]` must be that issue or one of its similar issues and PRs, and `@name` must have commented.
+
+Each citation becomes a chip linking to the exact lines on GitHub: **✓ verified**, **? couldn't confirm** (the source exists but doesn't seem to say that), or **✗ not found**. Under each answer, a short report lists the flagged citations and why. When the claim matches other lines in the same file, the report points there instead. Commands contrib-buddy derived from a file (such as `uv run pytest` from `pyproject.toml`) count as that file's content.
+
+This is word and code matching, not understanding: a verified citation means the source plausibly backs the sentence, not that the sentence is right.
+
+### Pre-claim safety check
+
+Before `plan` suggests claiming an issue, [`claim_check.py`](backend/contrib-buddy/scripts/claim_check.py) looks for anyone already on it, even without an explicit link:
+
+- **Open PRs that mention the issue**, including PRs from forks.
+- **Open PRs that look like the same work**: they share the issue's keywords and change the files this fix likely touches. A PR that only has a similar title counts too, if it was updated recently. Words that appear in most PR titles ("diagram" in a diagramming tool) are ignored.
+- **Assignees and "I'll take this" comments of any age.** Quoted text in replies is ignored.
+- **Whether a maintainer has replied, and whether the issue is vague**: no reproduction steps, no expected result, or labels like `needs triage`.
+
+The verdict is **🔒 Already closed**, **🛑 Someone may be on it** (assigned, an active PR, or a claim in the last 14 days), **✋ Ask first** (an older claim, a possibly related PR, or a vague issue) or **✅ Looks free**. The claim comment changes to match. When someone may be on it, it becomes a polite check-in instead of a claim. Otherwise it lists questions to ask the maintainer first, such as "@dev offered to work on this 120 days ago. Are they still on it?" or "Could you share the steps to reproduce it?". When a model is configured, it rewords these questions for the specific issue.
 
 ### Learn from similar merged PRs
 
@@ -114,7 +138,7 @@ Variables can also go in a `.env` file (see [`.env.example`](.env.example)).
 ## Limitations
 
 - **Heuristics, not understanding.** "Likely files" come from PRs that fixed similar issues when there are any, and otherwise from keyword matching over file paths, not code search. Similar issues are found by keyword search, so they can miss or mismatch. The clarity/difficulty scores are rough. The model refines them, but always read the code yourself.
-- **Claim detection** reads comments from the last 14 days in English only. Linked PRs are detected through GitHub search's `-linked:pr` qualifier.
+- **Claim detection** reads English comments only (the issue list uses the last 14 days; the pre-claim check reads every comment). Linked PRs are detected through GitHub search's `-linked:pr` qualifier. "A maintainer has replied" relies on GitHub's author association, which shows members who keep their organisation membership private as ordinary contributors.
 - **Rule extraction** is pattern-based (DCO, CLA, Conventional Commits, issue linking…). Unusual wording can be missed, so skim CONTRIBUTING anyway.
 - **Rate limits:** without `GITHUB_TOKEN`, one `analyze` + `issues` + `plan` run uses roughly 20–30 of your 60 requests/hour (the health check accounts for about 11; `fetch_repo_docs.py --no-health` skips it). `plan` adds about 20–40 calls (up to 8 of them searches) to find similar merged PRs, so set `GITHUB_TOKEN` if you plan more than one issue an hour.
 - **Health is a sample.** It reads the latest 100 PRs and 6 PR timelines, so a quiet month or a Hacktoberfest spam wave can skew it. Use it to decide where to look first, not as a final judgment.

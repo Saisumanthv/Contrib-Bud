@@ -103,7 +103,7 @@ def chat_setup(monkeypatch):
     info = {"repo": "o/r", "default_branch": "main", "description": "d", "topics": [],
             "license": None, "stack": {}, "rules": {}, "warnings": [],
             "docs": {"readme": None, "contributing": None, "pr_templates": []}}
-    monkeypatch.setattr(web.repo_docs, "fetch_repo_docs", lambda repo: info)
+    monkeypatch.setattr(web.repo_docs, "fetch_repo_docs", lambda repo, **kw: info)
     index = rag.RepoIndex.build("o/r", "main", [("templates/landing.html", "<h1>Welcome</h1>\n")])
     monkeypatch.setattr(web.rag, "get_index", lambda owner, repo, ref: index)
     return provider
@@ -121,6 +121,9 @@ def test_repo_chat_puts_retrieved_code_in_the_prompt(chat_setup):
     assert prompt.count("where is the landing page?") == 1  # not repeated in the history
     assert data["sources"] == [{"path": "templates/landing.html", "start": 1, "end": 1}]
     assert data["index_error"] is None and data["branch"] == "main"
+    (cite,) = data["citations"]  # the reply cites [templates/landing.html:1-2]
+    assert cite["refs"][0]["path"] == "templates/landing.html" and cite["status"] == "verified"
+    assert data["citation_summary"]["verified"] == 1
 
 
 def test_issue_chat_uses_issue_details_and_comments(chat_setup, monkeypatch):

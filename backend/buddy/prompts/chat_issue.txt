@@ -13,7 +13,7 @@ NEW QUESTION:
 $question
 
 Answer the NEW QUESTION about this issue using only the ISSUE details and the RETRIEVED parts above.
-- Cite where each claim comes from, e.g. [#$number], [comment by @name] or [src/app.py:12-40].
+- Cite where each claim comes from, e.g. [#$number], [comment by @name] or [src/app.py:12-40]. Use exact paths and the narrowest line range that contains what you describe: every citation is checked automatically, and wrong ones are flagged to the user.
 - When asked how to fix it, point to the specific files and lines involved and outline the change; quote short code snippets when they help.
 - If the answer is not in what you were given, say so plainly and suggest asking on the issue. Do not invent files, functions or commands.
 Be concise and friendly.

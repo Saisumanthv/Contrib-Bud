@@ -13,7 +13,7 @@ NEW QUESTION:
 $question
 
 Answer the NEW QUESTION using only the REPO FACTS and the RETRIEVED parts above.
-- Cite where each claim comes from, e.g. [README.md] or [src/app.py:12-40].
+- Cite where each claim comes from, e.g. [README.md] or [src/app.py:12-40]. Use the exact paths and the narrowest line range that contains what you describe: every citation is checked automatically against the file, and wrong ones are flagged to the user.
 - Quote short code snippets when they help.
 - If the answer is not in what you were given, say so plainly and suggest which file or folder to look at. Do not invent files, functions or commands.
 Be concise and friendly.

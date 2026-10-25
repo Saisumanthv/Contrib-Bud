@@ -118,8 +118,13 @@ def validate_plan(data: Any) -> list[str]:
     """Validate the plan-refinement JSON shape."""
     if not isinstance(data, dict):
         return ["top level must be a JSON object"]
-    return [
+    errs = [
         f"'{f}' must be a non-empty string"
         for f in ("approach", "pr_summary", "claim_one_line")
         if not isinstance(data.get(f), str) or not data[f].strip()
     ]
+    questions = data.get("questions", [])  # optional: older replies omit it
+    if not isinstance(questions, list) or len(questions) > 4 or not all(
+            isinstance(q, str) and q.strip() for q in questions):
+        errs.append("'questions' must be a list of at most 4 non-empty strings")
+    return errs

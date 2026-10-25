@@ -326,6 +326,8 @@ def plan_facts(data: dict[str, Any]) -> dict[str, Any]:
         "issue": {**data["issue"], "body": data["issue"]["body"][:3000]},
         "likely_files": data["likely_files"],
         "similar_merged_prs": similar_facts(data.get("similar_prs") or {}),
+        "claim_check": {k: (data.get("claim_check") or {}).get(k)
+                        for k in ("label", "findings", "questions")},
         "test_commands": data["stack"]["test_commands"],
         "lint_commands": data["stack"]["lint_commands"],
         "rules": data["rules"],
@@ -343,8 +345,12 @@ def apply_refinement(data: dict[str, Any], ai: dict[str, Any]) -> str:
         first, _, rest = desc.partition("\n")
         desc = f"{first}\n\n{ai['pr_summary']}\n{rest}"
     data["pr_description"] = desc
+    check = data.get("claim_check") or {}
+    if check.get("questions") and ai.get("questions"):  # issue-specific wording of the same asks
+        check["questions"] = [q.strip() for q in ai["questions"]]
+        data["claim_comment"] = planner._claim_comment(check)
     data["claim_comment"] = data["claim_comment"].replace(
-        "<one line: what you will change>", ai["claim_one_line"].rstrip("."))
+        planner.PLAN_PLACEHOLDER, ai["claim_one_line"].rstrip("."))
     return planner.render_markdown(data, approach=ai["approach"])
 
 

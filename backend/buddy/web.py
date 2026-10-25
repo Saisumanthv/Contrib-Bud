@@ -16,7 +16,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
 
-from buddy import llm, rag
+from buddy import citations, llm, rag
 from buddy.cli import analyze_facts, apply_refinement, issues_facts, merge_ranking, plan_facts
 from buddy.providers import Provider, ProviderError, get_provider
 from buddy.skill import GitHubError, github, issues, planner, ranker, repo_docs
@@ -118,7 +118,7 @@ def api_plan(body: dict[str, Any]) -> dict[str, Any]:
 
 def api_index(body: dict[str, Any]) -> dict[str, Any]:
     """Build (or reuse) the chat's search index for a repo, so the first question is quick."""
-    info = repo_docs.fetch_repo_docs(_text(body, "repo"))
+    info = repo_docs.fetch_repo_docs(_text(body, "repo"), health=False)
     owner, repo = info["repo"].split("/")
     return rag.get_index(owner, repo, info["default_branch"]).stats()
 
@@ -166,21 +166,30 @@ def api_chat(body: dict[str, Any]) -> dict[str, Any]:
     if mode == "issue":
         data = planner.plan_contribution(_text(body, "issue_url"))
         repo_name, branch = data["repo"], data["default_branch"]
-        context = {"issue": json.dumps(_issue_facts(data), ensure_ascii=False),
+        facts = _issue_facts(data)
+        context = {"issue": json.dumps(facts, ensure_ascii=False),
                    "number": data["issue"]["number"]}
+        similar = (data.get("similar_prs") or {}).get("examples", [])
+        known = citations.Known.from_stack(
+            data["stack"],
+            issue_numbers={data["issue"]["number"]}
+            | {n for ex in similar for n in (ex["issue"]["number"], ex["pr"]["number"])},
+            comment_authors={c["author"] for c in facts["comments"]})
         query = f"{question} {previous_question}"
         # Issue titles are often vague ("UX improvement"); the description names the parts.
         search_context = f"{data['issue']['title']} {data['issue']['body'][:1500]}"
     else:
-        info = repo_docs.fetch_repo_docs(_text(body, "repo"))
+        info = repo_docs.fetch_repo_docs(_text(body, "repo"), health=False)
         repo_name, branch = info["repo"], info["default_branch"]
         context = {"facts": json.dumps(analyze_facts(info), ensure_ascii=False)}
+        known = citations.Known.from_stack(info["stack"])
         query, search_context = f"{question} {previous_question}", ""
 
     # Without the index the chat still answers from the facts, and says why code is missing.
-    chunks, index_error = [], None
+    chunks, index, index_error = [], None, None
     try:
-        chunks = rag.get_index(*repo_name.split("/"), branch).search(query, context=search_context)
+        index = rag.get_index(*repo_name.split("/"), branch)
+        chunks = index.search(query, context=search_context)
     except GitHubError as exc:
         index_error = str(exc)
     snippets = rag.format_snippets(chunks) if not index_error else f"(unavailable: {index_error})"
@@ -190,8 +199,10 @@ def api_chat(body: dict[str, Any]) -> dict[str, Any]:
                         snippets=snippets, history=history, question=question, **context)
     except (ProviderError, llm.LLMError) as exc:
         raise ApiError(str(exc)) from exc
+    checked = citations.verify(reply, index, known)
     return {"reply": reply, "repo": repo_name, "branch": branch, "index_error": index_error,
-            "sources": [{"path": c.path, "start": c.start, "end": c.end} for c in chunks]}
+            "sources": [{"path": c.path, "start": c.start, "end": c.end} for c in chunks],
+            "citations": checked, "citation_summary": citations.summary(checked)}
 
 
 def api_tree(body: dict[str, Any]) -> dict[str, Any]:

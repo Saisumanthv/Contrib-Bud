@@ -2,6 +2,9 @@ import { useState, useEffect, useRef } from 'react';
 import ReactMarkdown from 'react-markdown';
 import './App.css';
 import { API_URL, fetchTree, githubFileUrl } from './api';
+import CitationReport from './CitationReport';
+import ClaimCheck from './ClaimCheck';
+import { citationComponents, markCitations } from './citationLinks';
 import HealthBadge from './HealthBadge';
 import SimilarPRs from './SimilarPRs';
 import ThemePicker from './ThemePicker';
@@ -140,7 +143,7 @@ export default function App() {
             if (!response.ok) throw new Error(result.error || 'Chat failed');
             append({
                 role: 'Assistant', content: result.reply, sources: result.sources,
-                repo: result.repo, branch: result.branch
+                citations: result.citations, repo: result.repo, branch: result.branch
             });
         } catch (err) {
             append({ role: 'System', content: `Error: ${err.message}` });
@@ -618,16 +621,7 @@ export default function App() {
                                         </div>
                                     )}
 
-                                    <div className="detail-item" style={{ marginTop: '1rem' }}>
-                                        <span className="label">Comment Template (To claim the issue)</span>
-                                        <div className="markdown-body pr-template" style={{ borderColor: 'rgba(var(--secondary-rgb), 0.5)', background: 'rgba(var(--secondary-rgb), 0.05)' }}>
-                                            <ReactMarkdown>
-                                                {`Hi! 👋 I would love to contribute by working on this issue. 
-
-Could you please assign it to me? Let me know if there is anything specific I should know before getting started!`}
-                                            </ReactMarkdown>
-                                        </div>
-                                    </div>
+                                    <ClaimCheck check={data.content.claim_check} comment={data.content.claim_comment} />
 
                                     {data.content.ai_error && (
                                         <div className="error-box">
@@ -686,7 +680,10 @@ Could you please assign it to me? Let me know if there is anything specific I sh
                             {messages.map((msg, idx) => (
                                 <div key={idx} className={`chat-message ${msg.role.toLowerCase()}`}>
                                     <strong>{msg.role}: </strong>
-                                    <ReactMarkdown>{msg.content}</ReactMarkdown>
+                                    <ReactMarkdown components={citationComponents(msg)}>
+                                        {markCitations(msg.content, msg.citations)}
+                                    </ReactMarkdown>
+                                    <CitationReport msg={msg} />
                                     {msg.sources?.length > 0 && (
                                         <details className="chat-sources">
                                             <summary>Searched {msg.sources.length} file sections</summary>

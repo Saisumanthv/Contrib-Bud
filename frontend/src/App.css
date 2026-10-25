@@ -532,6 +532,97 @@ main > .back-button {
   font-weight: 500;
 }
 
+.claim-check {
+  --status: var(--status-good);
+  --status-rgb: var(--status-good-rgb);
+  border: 1px solid rgba(var(--status-rgb), 0.35);
+  background: rgba(var(--status-rgb), 0.07);
+  border-radius: 12px;
+  padding: 1rem 1.25rem;
+}
+
+.claim-ask_first { --status: var(--status-warn); --status-rgb: var(--status-warn-rgb); }
+.claim-taken,
+.claim-closed { --status: var(--status-bad); --status-rgb: var(--status-bad-rgb); }
+
+.claim-verdict {
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 0.75rem;
+  color: var(--text-body);
+  line-height: 1.5;
+}
+
+.claim-badge {
+  color: var(--status);
+  background: rgba(var(--status-rgb), 0.15);
+  border-radius: 999px;
+  padding: 0.2rem 0.75rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.claim-findings,
+.claim-prs {
+  margin: 0.75rem 0 0;
+  padding-left: 1.25rem;
+  color: var(--text-secondary);
+  line-height: 1.5;
+  display: grid;
+  gap: 0.25rem;
+}
+
+.claim-prs a {
+  color: var(--accent-hover);
+}
+
+.claim-prs .tag {
+  margin-left: 0.5rem;
+}
+
+.claim-comment-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-top: 0.5rem;
+}
+
+.copy-button {
+  background: rgba(var(--accent-rgb), 0.12);
+  color: var(--accent-hover);
+  border: 1px solid rgba(var(--accent-rgb), 0.3);
+  border-radius: 8px;
+  padding: 0.35rem 0.9rem;
+  font: inherit;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+.copy-button:hover {
+  background: rgba(var(--accent-rgb), 0.2);
+}
+
+.copy-button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.claim-comment {
+  margin: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-family: inherit;
+  line-height: 1.6;
+  color: var(--text-body);
+  background: rgba(var(--secondary-rgb), 0.05);
+  border: 1px solid rgba(var(--secondary-rgb), 0.4);
+  border-radius: 12px;
+  padding: 1rem 1.25rem;
+}
+
 .similar-list {
   display: grid;
   gap: 0.75rem;
@@ -1177,6 +1268,81 @@ main > .back-button {
 
 .chat-index.error {
   color: var(--error-text);
+}
+
+.cite {
+  --status: var(--text-secondary);
+  --status-rgb: var(--overlay-rgb);
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.2rem;
+  padding: 0 0.35rem;
+  border-radius: 6px;
+  border: 1px solid rgba(var(--status-rgb), 0.35);
+  background: rgba(var(--status-rgb), 0.08);
+  color: var(--text-body);
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+  font-size: 0.85em;
+  text-decoration: none;
+  overflow-wrap: anywhere;
+}
+
+a.cite:hover {
+  border-color: rgba(var(--status-rgb), 0.7);
+}
+
+.cite a {
+  color: inherit;
+  text-decoration: none;
+}
+
+.cite-verified { --status: var(--status-good); --status-rgb: var(--status-good-rgb); }
+.cite-unsupported { --status: var(--status-warn); --status-rgb: var(--status-warn-rgb); }
+.cite-not_found { --status: var(--status-bad); --status-rgb: var(--status-bad-rgb); }
+
+.cite-not_found {
+  text-decoration: line-through;
+  text-decoration-color: rgba(var(--status-rgb), 0.6);
+}
+
+.cite-mark {
+  color: var(--status);
+  font-family: 'Outfit', sans-serif;
+  font-weight: 700;
+}
+
+.citation-report {
+  margin: 0.75rem 0 0;
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+}
+
+.citation-report.all-verified {
+  color: var(--status-good);
+}
+
+.citation-report.has-flags summary {
+  cursor: pointer;
+  color: var(--status-warn);
+}
+
+.citation-report ul {
+  margin: 0.5rem 0 0;
+  padding-left: 1.1rem;
+  display: grid;
+  gap: 0.5rem;
+  line-height: 1.5;
+}
+
+.citation-report li a {
+  color: var(--accent-hover);
+}
+
+.citation-claim {
+  display: block;
+  margin-top: 0.15rem;
+  font-style: italic;
+  color: var(--text-secondary);
 }
 
 .chat-sources {

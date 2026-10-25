@@ -117,6 +117,8 @@ class RepoIndex:
     files: int
     truncated: bool
     built_at: float = field(default_factory=time.time)
+    # Every indexed file's lines, so citations like [src/app.py:12-40] can be checked.
+    lines: dict[str, list[str]] = field(default_factory=dict, repr=False)
     _postings: dict[str, list[tuple[int, int]]] = field(default_factory=dict, repr=False)
     _lengths: list[int] = field(default_factory=list, repr=False)
 
@@ -126,6 +128,7 @@ class RepoIndex:
         index = cls(repo, ref, [], 0, truncated)
         for path, text in files:
             index.files += 1
+            index.lines[path] = text.splitlines()
             # File names count twice: "where is the landing page" should find landing.html.
             path_tokens = tokenize(path.replace("/", " ").replace(".", " ")) * 2
             for chunk in chunk_text(path, text):
@@ -169,6 +172,19 @@ class RepoIndex:
             if len(picked) == k:
                 break
         return picked
+
+    def resolve(self, path: str) -> str | None:
+        """The indexed path a citation means: exact, then case-insensitive, then the only
+        file ending in it ("app.py" for "src/app.py")."""
+        path = path.strip().removeprefix("./").lstrip("/")
+        if path in self.lines:
+            return path
+        lower = path.lower()
+        for candidates in ([p for p in self.lines if p.lower() == lower],
+                           [p for p in self.lines if p.lower().endswith("/" + lower)]):
+            if len(candidates) == 1:
+                return candidates[0]
+        return None
 
     def stats(self) -> dict[str, object]:
         return {"repo": self.repo, "branch": self.ref, "files": self.files,
