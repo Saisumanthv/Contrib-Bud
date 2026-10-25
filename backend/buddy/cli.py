@@ -449,6 +449,76 @@ def check(
     raise typer.Exit(0 if result["ready"] else 1)
 
 
+@app.command(name="coach")
+def coach_cmd(
+    pr_url: str | None = typer.Argument(None, help="https://github.com/OWNER/REPO/pull/N"),
+    text_file: Path | None = typer.Option(None, "--text", "-t",
+                                          help="Pasted review comments or a CI log ('-' = stdin)."),
+    repo: str | None = typer.Option(None, "--repo", help="owner/repo, when only --text is given."),
+    no_ai: bool = typer.Option(False, "--no-ai", help=NO_AI_HELP),
+    as_json: bool = typer.Option(False, "--json", help="Print machine-readable JSON."),
+) -> None:
+    """Explain review comments or a failing CI check on your PR, and how to fix them."""
+    from buddy import coach
+
+    provider = provider_or_exit(no_ai)
+    text = None
+    if text_file:
+        text = sys.stdin.read() if str(text_file) == "-" else \
+            text_file.read_text(encoding="utf-8", errors="replace")
+    if not pr_url and not text:
+        fail("Give a pull request link, or --text with review comments or a CI log.",
+             "Example: buddy coach --text ci.log --repo owner/repo")
+    try:
+        with console.status("Reading the reviews, checks and code…"):
+            result = coach.run(pr_url, text, repo, provider)
+    except GitHubError as exc:
+        fail(str(exc))
+    if as_json:
+        dump(result)
+        return
+
+    pr = result["facts"].get("pr")
+    if pr:
+        console.print(Panel(f"[bold]{esc(pr['title'] or '')}[/]\n{pr['url']}  ·  "
+                            f"{pr['head']} → {pr['base']}", title=f"PR #{pr['number']}",
+                            title_align="left"))
+    if result["facts"].get("logs_need_token"):
+        console.print("[dim]Set GITHUB_TOKEN to read failed job logs (GitHub requires it).[/]")
+    ai = result["ai"]
+    if ai and provider:
+        ai_header(provider)
+        console.print(Markdown(ai["summary"]))
+        for n, item in enumerate(ai["items"], 1):
+            body = f"{item['what']}\n\n{item['fix']}"
+            if item["commands"]:
+                body += "\n\n```bash\n" + "\n".join(item["commands"]) + "\n```"
+            flagged = sum(c["status"] in ("unsupported", "not_found")
+                          for f in item["citations"].values() for c in f)
+            title = f"{n}. {item['title']}" + (f"  (⚠ {flagged} unverified citation(s))"
+                                               if flagged else "")
+            console.print(Panel(Markdown(body), title=esc(title), title_align="left",
+                                border_style="magenta" if item["kind"] == "review" else "cyan"))
+        if ai.get("reply"):
+            console.print(Panel(esc(ai["reply"]), title="Reply draft (post it yourself)",
+                                title_align="left", border_style="green"))
+    else:
+        if result["ai_error"]:
+            console.print(f"[yellow]{esc(result['ai_error'])}[/]")
+        if not result["guidance"]:
+            console.print("Nothing recognisable found. Paste the full log or review text.")
+        for g in result["guidance"]:
+            body = g["explanation"]
+            if g["where"]:
+                body += "\nWhere: " + ", ".join(g["where"])
+            if g["commands"]:
+                body += "\n\n" + "\n".join(f"  $ {c}" for c in g["commands"])
+            console.print(Panel(esc(body), title=esc(g["title"]), title_align="left",
+                                subtitle=esc(g["source"]), subtitle_align="right"))
+    next_step("Make the changes, push to the same branch (the PR updates by itself), then "
+              "reply on the PR yourself.")
+
+
 @app.command()
 def web(
     port: int = typer.Option(8765, "--port", "-p", help="Port to serve on."),

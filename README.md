@@ -45,6 +45,7 @@ flowchart LR
       F4[plan_contribution.py<br/>branch, commit, likely files, PR text]
       F7[similar_prs.py<br/>merged PRs that fixed similar issues]
       F8[claim_check.py<br/>overlapping work, questions to ask]
+      F9[pr_coach.py<br/>review threads, failing checks, CI logs]
       F5[precheck_pr.py<br/>pre-PR checklist]
     end
     S -->|GitHub REST API +<br/>raw.githubusercontent.com| GH[(GitHub)]
@@ -62,6 +63,7 @@ flowchart LR
 | `buddy issues <owner/repo>` | Beginner-labelled issues minus assigned / linked-PR / recently claimed; heuristic scores | Rank, explain each issue, recommend one |
 | `buddy plan <issue-url>` | Branch name, setup/test commands, **similar merged PRs** (files, size, review), likely files, commit style, PR template | Issue-specific approach, PR summary, claim comment with issue-specific questions |
 | `buddy check` | Diff size, commit style, DCO, issue link, PR template, runs lint/tests | Explain each failure and how to fix it |
+| `buddy coach [<pr-url>] [--text log.txt]` | Review threads, reviewer verdicts, failing checks with annotations and logs, parsed errors, conflicts | Explain what reviewers and CI want, the fix for each, and a reply draft |
 
 ### Repo health: is this repo worth my time?
 
@@ -107,6 +109,21 @@ The verdict is **🔒 Already closed**, **🛑 Someone may be on it** (assigned,
 For the chosen issue, `plan` finds closed issues like it (keywords from the title, then shared labels) and the merged PRs that fixed them ([`similar_prs.py`](backend/contrib-buddy/scripts/similar_prs.py)). It shows which files each PR touched, how big it was (+/- lines, files changed), how long it took to merge, and how reviewers responded (number of reviews and requests for changes). Files those PRs changed come first in **Likely files**, ahead of keyword matches on file paths. Large PRs (30+ files) are flagged and left out of that list.
 
 The fixing PR is found from the issue's timeline: a merged PR that cross-referenced the issue, or else the PR that contains the commit that closed it.
+
+### PR coach: after you open the PR
+
+Many first PRs stall after the first review. Paste a PR link (in the main box, the **🩺 PR coach** tab or at the end of a plan), a reviewer's comments, or the log of a failing check:
+
+- **From a PR link**, [`pr_coach.py`](backend/contrib-buddy/scripts/pr_coach.py) collects:
+  - open review threads, each with its file, line, the diff around it and every reply, and whether the reviewer is waiting on you;
+  - each reviewer's latest verdict;
+  - merge conflicts;
+  - failed checks, with their annotations and, when `GITHUB_TOKEN` is set, an excerpt of the failed job's log. GitHub only serves logs to authenticated requests.
+- **From pasted text**, it pulls the error lines out of logs from pytest, ruff/flake8, eslint, tsc, mypy, black/prettier, jest, Go, Rust, npm and GitHub Actions. It sorts them into kinds: lint, format, type, test, build, DCO, CLA, changelog or commit message.
+- **Each kind gets a concrete fix, even without a model.** It uses the tool's own fixer for the files named (`ruff check --fix src/x.py`), the exact failing test (`pytest tests/test_x.py::test_y -x`), or `git rebase --signoff` for a missing DCO, followed by the repo's documented command to check again.
+- **The model then explains each request in plain English**: what a "nit" is, whether it blocks the merge, and when a failure looks flaky and worth asking a maintainer to re-run. It suggests fixes with citations into the PR's own code (the contributor's branch is indexed, not `main`), checked like chat citations. It also drafts a polite reply.
+
+You make the changes, push and post the reply yourself.
 
 ## Agent skill vs. CLI
 

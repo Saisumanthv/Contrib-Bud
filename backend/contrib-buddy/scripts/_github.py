@@ -30,13 +30,17 @@ except ImportError:  # pragma: no cover - environment guard
 
 API = "https://api.github.com"
 RAW = "https://raw.githubusercontent.com"
-TIMEOUT = 20
+TIMEOUT = 12  # GitHub answers in 1-3s; a request stalled this long is better retried
 # Give up on an unreachable address quickly so the next DNS address is tried (a
 # blocked GitHub IP otherwise costs the OS default of ~21s per new connection).
 CONNECT_TIMEOUT = 5
+# On a flaky connection, a stalled or reset request usually works when sent again.
+RETRY_DELAYS = (2, 5, 10)  # seconds between attempts: rides out ~25s connection drops
+RETRY_STATUSES = {502, 503, 504}  # GitHub's own momentary hiccups
 USER_AGENT = "contrib-buddy/0.1"
 CACHE_DIR = Path(tempfile.gettempdir()) / "contrib-buddy-cache"
 CACHE_TTL = 15 * 60
+STALE_CACHE_TTL = 24 * 60 * 60  # used only when GitHub can't be reached at all
 
 _REPO_RE = re.compile(r"^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})/[A-Za-z0-9._-]{1,100}$")
 _ISSUE_URL_RE = re.compile(
@@ -122,9 +126,9 @@ def _cache_file(path: str, params: dict[str, Any] | None) -> Path | None:
     return CACHE_DIR / f"{key[:32]}.json"
 
 
-def _cache_read(file: Path | None) -> Any:
+def _cache_read(file: Path | None, max_age: float = CACHE_TTL) -> Any:
     try:
-        if file and file.exists() and time.time() - file.stat().st_mtime < CACHE_TTL:
+        if file and file.exists() and time.time() - file.stat().st_mtime < max_age:
             return json.loads(file.read_text(encoding="utf-8"))
     except (OSError, ValueError):
         pass
@@ -139,6 +143,25 @@ def _cache_write(file: Path | None, data: Any) -> None:
         file.write_text(json.dumps(data), encoding="utf-8")
     except OSError:
         pass  # caching is best-effort
+
+
+def _get_with_retries(url: str, **kwargs: Any) -> requests.Response:
+    """GET, retrying timeouts, dropped connections and GitHub 502/503/504s.
+
+    Raises the last requests exception if every attempt fails to connect or answer.
+    """
+    for delay in (*RETRY_DELAYS, None):
+        try:
+            resp = _session().get(url, timeout=(CONNECT_TIMEOUT, TIMEOUT), **kwargs)
+        except (requests.Timeout, requests.ConnectionError):
+            if delay is None:
+                raise
+            _local.__dict__.pop("session", None)  # a stalled keep-alive socket: start fresh
+        else:
+            if resp.status_code not in RETRY_STATUSES or delay is None:
+                return resp
+        time.sleep(delay)
+    raise AssertionError("unreachable")  # the last attempt always returns or raises
 
 
 def api_get(path: str, params: dict[str, Any] | None = None, *, not_found: str = "") -> Any:
@@ -157,11 +180,16 @@ def api_get(path: str, params: dict[str, Any] | None = None, *, not_found: str =
     if cached is not None:
         return cached
     try:
-        resp = _session().get(f"{API}{path}", headers=_headers(), params=params,
-                              timeout=(CONNECT_TIMEOUT, TIMEOUT))
+        resp = _get_with_retries(f"{API}{path}", headers=_headers(), params=params)
     except requests.RequestException as exc:
-        raise GitHubError(f"Could not reach api.github.com ({exc.__class__.__name__}). "
-                          "Check your internet connection.") from exc
+        # GitHub unreachable: an older answer beats an error page (repo data changes slowly).
+        stale = _cache_read(cache_file, STALE_CACHE_TTL)
+        if stale is not None:
+            return stale
+        raise GitHubError(
+            f"Could not reach api.github.com ({exc.__class__.__name__}), even after "
+            f"{len(RETRY_DELAYS) + 1} tries. Your connection to GitHub looks unstable: "
+            "try again, or switch networks / turn off a VPN.") from exc
     if resp.status_code == 404:
         raise GitHubError(not_found or f"Not found on GitHub: {path}")
     if resp.status_code in (403, 429) and (
@@ -185,8 +213,7 @@ def raw_get(owner: str, repo: str, ref: str, path: str) -> str | None:
     """Fetch a file's text from raw.githubusercontent.com, or None if missing."""
     url = f"{RAW}/{owner}/{repo}/{quote(ref, safe='')}/{quote(path)}"
     try:
-        resp = _session().get(url, headers={"User-Agent": USER_AGENT},
-                              timeout=(CONNECT_TIMEOUT, TIMEOUT))
+        resp = _get_with_retries(url, headers={"User-Agent": USER_AGENT})
     except requests.RequestException:
         return None
     if resp.status_code != 200:

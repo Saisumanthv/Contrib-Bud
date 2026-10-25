@@ -51,6 +51,12 @@ python /path/to/contrib-buddy/scripts/precheck_pr.py --base main [--pr-body pr.m
 ```
 Walk the user through each `fail`/`warn` item and how to fix it. Use `--skip-commands` if running lint/tests is too slow or unsafe.
 
+### 5. After opening the PR: review comments and failing checks
+```
+python scripts/pr_coach.py https://github.com/OWNER/REPO/pull/45 [--text review-or-ci-log.txt]
+```
+It prints open review `threads` (file, line, diff, replies; `waiting_on_you` means the reviewer spoke last), each reviewer's latest verdict, failed `checks` with annotations and parsed log errors (logs need `GITHUB_TOKEN`), parsed pasted text, and `guidance` with a concrete fix for each kind of failure. Give one item per request, most blocking first. Explain jargon (nit, LGTM, rebase), say whether each item blocks the merge, and give the fix using the `guidance` commands. Flag failures that look flaky or unrelated to the PR so the user can ask a maintainer to re-run them. Draft a short, polite reply, which the user posts **themselves** after pushing. Never push, re-run checks or comment for them. See [references/good-pr-etiquette.md](references/good-pr-etiquette.md).
+
 ## References (load only when needed)
 
 - [references/contribution-workflow.md](references/contribution-workflow.md) — fork → branch → commit → PR flow, syncing with upstream, fixing review feedback.

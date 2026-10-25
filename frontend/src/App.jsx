@@ -4,6 +4,7 @@ import './App.css';
 import { API_URL, fetchTree, githubFileUrl } from './api';
 import CitationReport from './CitationReport';
 import ClaimCheck from './ClaimCheck';
+import PRCoach from './PRCoach';
 import { citationComponents, markCitations } from './citationLinks';
 import HealthBadge from './HealthBadge';
 import SimilarPRs from './SimilarPRs';
@@ -11,12 +12,14 @@ import ThemePicker from './ThemePicker';
 
 const REPO_LINK = /^(https?:\/\/)?(www\.)?github\.com\/[\w.-]+\/[\w.-]+\.git\/?$/i;
 const ISSUE_LINK = /^(https?:\/\/)?(www\.)?github\.com\/[\w.-]+\/[\w.-]+\/issues\/\d+\/?([?#].*)?$/i;
+const PR_LINK = /^(https?:\/\/)?(www\.)?github\.com\/[\w.-]+\/[\w.-]+\/pull\/\d+\/?([?#].*)?$/i;
 
 // 'repo' for a repo link ending in .git, 'issue' for an issue link, otherwise null.
 function linkKind(text) {
     const link = text.trim();
     if (REPO_LINK.test(link)) return 'repo';
     if (ISSUE_LINK.test(link)) return 'issue';
+    if (PR_LINK.test(link)) return 'pr';
     return null;
 }
 
@@ -261,6 +264,15 @@ export default function App() {
 
         const link = query.trim();
         setRepoView(null);
+        if (kind === 'pr') {
+            // The coach page loads the PR itself, so it can show its own progress and errors.
+            request.current?.abort();
+            setStarted(true);
+            setError('');
+            setIssues(null);
+            setData({ type: 'coach', content: { prUrl: link } });
+            return;
+        }
         run(signal => (kind === 'issue' ? loadPlan(link, signal) : loadRepo(link, signal)));
     };
 
@@ -329,7 +341,7 @@ export default function App() {
         run(signal => loadRepo(repo, signal));
     };
 
-    const chatReady = Boolean(data) && !loading;
+    const chatReady = Boolean(chat) && !loading; // the coach page has no repo to chat about
 
     return (
         <div className={`container ${started ? 'with-chat' : ''}`}>
@@ -362,7 +374,7 @@ export default function App() {
                 </div>
                 {query.trim() !== '' && !kind && (
                     <p id="link-hint" className="link-hint">
-                        Enter a GitHub repo link ending in <code>.git</code>, like <code>https://github.com/facebook/react.git</code>, or a link to one of its issues.
+                        Enter a GitHub repo link ending in <code>.git</code>, like <code>https://github.com/facebook/react.git</code>, a link to one of its issues, or a link to your pull request for the PR coach.
                     </p>
                 )}
 
@@ -392,7 +404,15 @@ export default function App() {
 
                 {data && !loading && (
                     <div className="glass result-box animate-in" style={{ animationDelay: '0.1s' }}>
-                        {data.type === 'analyze' ? (
+                        {data.type === 'coach' ? (
+                            <div>
+                                <h2>🩺 PR coach</h2>
+                                <p className="subtitle">
+                                    What your reviewers and checks are asking for, in plain English, and how to fix it.
+                                </p>
+                                <PRCoach key={data.content.prUrl} initialPrUrl={data.content.prUrl} autoRun />
+                            </div>
+                        ) : data.type === 'analyze' ? (
                             <div>
                                 <h2>{data.content.facts.repo}</h2>
                                 {data.content.facts.description && (
@@ -459,7 +479,25 @@ export default function App() {
                                     >
                                         🌳 Tree <span className="tab-count">{data.content.facts.file_count ?? 0}</span>
                                     </button>
+                                    <button
+                                        type="button"
+                                        role="tab"
+                                        aria-selected={activeTab === 'coach'}
+                                        className={`tab ${activeTab === 'coach' ? 'active' : ''}`}
+                                        onClick={() => setActiveTab('coach')}
+                                    >
+                                        🩺 PR coach
+                                    </button>
                                 </div>
+
+                                {activeTab === 'coach' && (
+                                    <div className="tree-section">
+                                        <p className="issues-hint">
+                                            Opened a PR here? Paste its link, a reviewer's comments or a failing check's log.
+                                        </p>
+                                        <PRCoach repo={data.content.facts.repo} />
+                                    </div>
+                                )}
 
                                 {activeTab === 'tree' && (
                                     <div className="tree-section">
@@ -629,6 +667,11 @@ export default function App() {
                                             <p>{data.content.ai_error}</p>
                                         </div>
                                     )}
+
+                                    <details className="detail-item coach-later">
+                                        <summary className="label">🩺 After you open your PR: got review comments or a failing check?</summary>
+                                        <PRCoach repo={data.content.repo} />
+                                    </details>
                                 </div>
                             </div>
                         )}

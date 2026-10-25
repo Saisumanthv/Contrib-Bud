@@ -114,6 +114,36 @@ def validate_ranking(valid_numbers: set[int]) -> Validator:
     return check
 
 
+COACH_KINDS = {"review", "ci", "merge", "other"}
+
+
+def validate_coach(data: Any) -> list[str]:
+    """Validate the PR coach JSON shape."""
+    if not isinstance(data, dict):
+        return ["top level must be a JSON object"]
+    errs = []
+    if not isinstance(data.get("summary"), str) or not data["summary"].strip():
+        errs.append("'summary' must be a non-empty string")
+    if not isinstance(data.get("reply", ""), str):
+        errs.append("'reply' must be a string")
+    items = data.get("items")
+    if not isinstance(items, list) or not 1 <= len(items) <= 8:
+        return errs + ["'items' must be a list of 1 to 8 objects"]
+    for i, item in enumerate(items):
+        if not isinstance(item, dict):
+            errs.append(f"items[{i}] must be an object")
+            continue
+        if item.get("kind") not in COACH_KINDS:
+            errs.append(f"items[{i}].kind must be one of {sorted(COACH_KINDS)}")
+        for field in ("title", "what", "fix"):
+            if not isinstance(item.get(field), str) or not item[field].strip():
+                errs.append(f"items[{i}].{field} must be a non-empty string")
+        commands = item.get("commands", [])
+        if not isinstance(commands, list) or not all(isinstance(c, str) for c in commands):
+            errs.append(f"items[{i}].commands must be a list of strings")
+    return errs
+
+
 def validate_plan(data: Any) -> list[str]:
     """Validate the plan-refinement JSON shape."""
     if not isinstance(data, dict):

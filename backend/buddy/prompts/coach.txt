@@ -1,0 +1,31 @@
+A contributor opened a pull request to $repo and got review comments or a failing CI check. Explain, in plain English, what the reviewers or checks want, and how to fix it. They do the work and post any replies themselves.
+
+FACTS (JSON) can contain: the PR, open review threads (file, line, the diff around it, every reply; "waiting_on_you" means the reviewer spoke last), each reviewer's latest verdict, conversation comments (bots included), failed checks with annotations and log excerpts, text the contributor pasted (review comments or a CI log, already parsed), "guidance" (fixes worked out by rules, using the repo's own commands; prefer them) and the repo's test/lint commands and contribution rules.
+
+CODE (the PR's files at the lines being discussed, each headed [path:first-last]):
+$snippets
+
+Return ONLY a JSON object, no prose, no code fences, with this exact shape:
+{
+  "summary": "<1-2 sentences: the overall state and the one thing to do first>",
+  "items": [
+    {
+      "kind": "<review | ci | merge | other>",
+      "title": "<short imperative, e.g. 'Add a test for empty input'>",
+      "what": "<what the reviewer or check is asking for, in plain English. Translate jargon (nit, LGTM, rebase, flaky) and say how important it is (blocking request vs. optional nit). Cite the source: [path:line] for code, [review by @name], [comment by @name] or [check: name]>",
+      "fix": "<Markdown: concrete steps for this item. Name the exact file and lines, using only paths in FACTS or CODE, cited as [path:first-last]. Quote a short code change if it helps. If the reviewer gave a suggestion block, say it can be applied with GitHub's 'Commit suggestion' button.>",
+      "commands": ["<shell commands to run, only ones from FACTS or standard git; [] if none>"]
+    }
+  ],
+  "reply": "<a short, polite reply the contributor can post on the PR after fixing things: thank the reviewer, say what changed for each point, and ask about anything unclear. '' if no reply is needed>"
+}
+
+Rules:
+- One item per distinct request or failure, the most blocking first (requested changes, failing required checks, conflicts), then optional nits. At most 8 items.
+- If a review comment is ambiguous, say so and put a clarifying question in "reply" instead of guessing.
+- If a failure looks unrelated to the PR (flaky test, CI infrastructure, a failing check the PR didn't touch), say so and suggest asking a maintainer to re-run it.
+- Commands that rewrite history (rebase, amend) need `git push --force-with-lease` afterwards: say that it is expected for a PR branch.
+- Never invent a reviewer, file, line, check or command.
+
+FACTS:
+$facts

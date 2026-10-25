@@ -532,6 +532,203 @@ main > .back-button {
   font-weight: 500;
 }
 
+.coach {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.coach-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.coach-input {
+  width: 100%;
+  box-sizing: border-box;
+  background: var(--inset-bg);
+  border: 1px solid var(--surface-border);
+  border-radius: 12px;
+  padding: 0.75rem 1rem;
+  color: var(--text-primary);
+  font: inherit;
+  margin-bottom: 0.5rem;
+}
+
+.coach-input:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.coach-input[aria-invalid="true"] {
+  border-color: var(--error);
+}
+
+.coach-textarea {
+  resize: vertical;
+  min-height: 9rem;
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+  font-size: 0.85rem;
+  line-height: 1.5;
+}
+
+.coach-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem 1rem;
+}
+
+.coach-actions .search-button {
+  padding: 0.75rem 1.5rem;
+  font-size: 1rem;
+}
+
+.coach-actions .search-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.coach-result {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.coach-pr {
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  font-weight: 600;
+}
+
+.coach-pr a {
+  color: var(--text-primary);
+}
+
+.coach-items {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.coach-item {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 1rem 1.25rem;
+  background: rgba(var(--overlay-rgb), 0.03);
+  border: 1px solid var(--surface-border);
+  border-radius: 12px;
+  min-width: 0;
+}
+
+.coach-item header {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+}
+
+.coach-item h4 {
+  margin: 0;
+  font-size: 1.05rem;
+}
+
+.coach-item p {
+  margin: 0;
+  line-height: 1.55;
+  color: var(--text-body);
+}
+
+.coach-item .markdown-body p {
+  margin: 0 0 0.5rem;
+}
+
+.coach-kind {
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 0.15rem 0.55rem;
+  border-radius: 999px;
+  background: rgba(var(--accent-rgb), 0.12);
+  color: var(--accent-hover);
+}
+
+.coach-kind.kind-review { background: rgba(var(--secondary-rgb), 0.15); color: var(--secondary-text); }
+.coach-kind.kind-merge,
+.coach-kind.kind-conflict { background: rgba(var(--status-bad-rgb), 0.12); color: var(--status-bad); }
+
+.coach-where,
+.coach-source {
+  font-size: 0.85rem;
+  color: var(--text-secondary) !important;
+  overflow-wrap: anywhere;
+}
+
+.coach-commands {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+}
+
+.coach-commands pre {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  overflow-x: auto;
+  background: var(--inset-bg);
+  border-radius: 8px;
+  padding: 0.6rem 0.9rem;
+  font-size: 0.85rem;
+}
+
+.coach-threads summary,
+.coach-later > summary {
+  cursor: pointer;
+}
+
+.coach-threads summary {
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+}
+
+.coach-thread {
+  margin-top: 0.75rem;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.coach-thread a {
+  color: var(--accent-hover);
+}
+
+.coach-thread blockquote {
+  flex-basis: 100%;
+  margin: 0;
+  padding: 0.5rem 0.9rem;
+  border-left: 3px solid rgba(var(--secondary-rgb), 0.5);
+  color: var(--text-body);
+  font-size: 0.9rem;
+}
+
+.coach-thread blockquote p {
+  margin: 0.25rem 0;
+}
+
+.coach-later {
+  margin-top: 1rem;
+}
+
+.coach-later[open] > summary {
+  margin-bottom: 1rem;
+}
+
 .claim-check {
   --status: var(--status-good);
   --status-rgb: var(--status-good-rgb);

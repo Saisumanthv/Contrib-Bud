@@ -16,7 +16,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
 
-from buddy import citations, llm, rag
+from buddy import citations, coach, llm, rag
 from buddy.cli import analyze_facts, apply_refinement, issues_facts, merge_ranking, plan_facts
 from buddy.providers import Provider, ProviderError, get_provider
 from buddy.skill import GitHubError, github, issues, planner, ranker, repo_docs
@@ -25,6 +25,7 @@ CHAT_HISTORY_TURNS = 10  # messages of earlier conversation sent with each quest
 
 STATIC_DIR = Path(__file__).resolve().parent.parent.parent / "frontend"
 MAX_BODY = 10_000
+MAX_COACH_BODY = 1_000_000
 
 
 class ApiError(Exception):
@@ -205,6 +206,26 @@ def api_chat(body: dict[str, Any]) -> dict[str, Any]:
             "citations": checked, "citation_summary": citations.summary(checked)}
 
 
+MAX_COACH_TEXT = 200_000
+
+
+def api_coach(body: dict[str, Any]) -> dict[str, Any]:
+    """Explain a PR's review comments / failing checks, or pasted ones, and suggest fixes."""
+    pr_url = body.get("pr_url") if isinstance(body.get("pr_url"), str) else ""
+    text = body.get("text") if isinstance(body.get("text"), str) else ""
+    repo = body.get("repo") if isinstance(body.get("repo"), str) else ""
+    if not pr_url.strip() and not text.strip():
+        raise ApiError("Paste review comments or a CI log, or give a pull request link.")
+    if pr_url.strip() and "/pull/" not in pr_url:
+        raise ApiError("That isn't a pull request link (expected .../pull/123).")
+    if len(text) > MAX_COACH_TEXT:
+        text = text[-MAX_COACH_TEXT:]  # the end of a log is where failures are
+    provider, ai_error = maybe_provider(bool(body.get("ai", True)))
+    result = coach.run(pr_url.strip() or None, text or None, repo.strip() or None, provider)
+    result["ai_error"] = result["ai_error"] or ai_error
+    return result
+
+
 def api_tree(body: dict[str, Any]) -> dict[str, Any]:
     owner, repo = repo_docs.parse_repo(_text(body, "repo"))
     branch = _text(body, "branch")
@@ -214,7 +235,8 @@ def api_tree(body: dict[str, Any]) -> dict[str, Any]:
 
 
 ROUTES = {"/api/analyze": api_analyze, "/api/issues": api_issues, "/api/plan": api_plan,
-          "/api/chat": api_chat, "/api/tree": api_tree, "/api/index": api_index}
+          "/api/chat": api_chat, "/api/tree": api_tree, "/api/index": api_index,
+          "/api/coach": api_coach}
 
 
 # --- HTTP plumbing ----------------------------------------------------------------
@@ -253,7 +275,8 @@ class Handler(BaseHTTPRequestHandler):
             length = int(self.headers.get("Content-Length") or 0)
         except ValueError:
             length = -1
-        if not 0 <= length <= MAX_BODY:
+        limit = MAX_COACH_BODY if self.path == "/api/coach" else MAX_BODY  # pasted CI logs
+        if not 0 <= length <= limit:
             self.close_connection = True
             self._json(HTTPStatus.REQUEST_ENTITY_TOO_LARGE, {"error": "Request too large."})
             return

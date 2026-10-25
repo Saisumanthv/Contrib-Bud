@@ -1,22 +1,10 @@
-import { useState } from 'react';
+import CopyButton from './CopyButton';
 
 const ICONS = { closed: '🔒', taken: '🛑', ask_first: '✋', clear: '✅' };
 
 // "Is it safe to claim this?": overlapping work found on GitHub, questions to ask first,
 // and the comment to post (a check-in when someone may already be on it).
 export default function ClaimCheck({ check, comment }) {
-    const [copied, setCopied] = useState(false);
-
-    const copy = async () => {
-        try {
-            await navigator.clipboard.writeText(comment);
-            setCopied(true);
-            setTimeout(() => setCopied(false), 2000);
-        } catch {
-            setCopied(false); // clipboard blocked: the text is still there to select
-        }
-    };
-
     return (
         <div className="detail-item">
             <span className="label">Before you claim</span>
@@ -52,9 +40,7 @@ export default function ClaimCheck({ check, comment }) {
                         <span className="label">
                             {check?.verdict === 'taken' ? 'Comment to check in first' : 'Comment to post on the issue'}
                         </span>
-                        <button type="button" className="copy-button" onClick={copy}>
-                            {copied ? 'Copied ✓' : 'Copy'}
-                        </button>
+                        <CopyButton text={comment} />
                     </div>
                     <pre className="claim-comment">{comment}</pre>
                     <p className="similar-empty">
